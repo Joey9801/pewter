@@ -48,7 +48,7 @@ impl BitBoard {
         Self(!self.0)
     }
 
-    pub fn iter(self) -> impl Iterator<Item=BoardPos> {
+    pub fn iter(self) -> impl Iterator<Item = BoardPos> {
         (0..64)
             .filter(move |i| (1 << i) & self.0 != 0)
             .map(BoardPos::from_bitboard_offset)

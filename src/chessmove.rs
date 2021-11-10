@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 
-use crate::{Piece, State};
 use crate::coordinates::{BoardPos, File};
+use crate::{Piece, State};
 
 bitflags! {
     pub struct MoveFlags: u8 {
@@ -68,7 +68,6 @@ pub struct Move {
     pub flags: MoveFlags,
 }
 
-
 #[derive(Clone, Copy, Debug)]
 pub enum ParseLongAlgebraicError {
     MissingChars,
@@ -78,11 +77,14 @@ pub enum ParseLongAlgebraicError {
     WrongColor,
     CaptureSelf,
     BadCastle,
-    BadPromotion
+    BadPromotion,
 }
 
 impl Move {
-    pub fn from_long_algebraic(state: &State, algebraic_str: &str) -> Result<Self, ParseLongAlgebraicError> {
+    pub fn from_long_algebraic(
+        state: &State,
+        algebraic_str: &str,
+    ) -> Result<Self, ParseLongAlgebraicError> {
         if algebraic_str.len() < 4 {
             return Err(ParseLongAlgebraicError::MissingChars);
         }
@@ -95,8 +97,7 @@ impl Move {
         let to = BoardPos::from_algebraic(&algebraic_str[2..4])
             .ok_or(ParseLongAlgebraicError::InvalidSquare)?;
 
-        let (color, piece) = state.get(from)
-            .ok_or(ParseLongAlgebraicError::NoPiece)?;
+        let (color, piece) = state.get(from).ok_or(ParseLongAlgebraicError::NoPiece)?;
 
         if color != state.to_play {
             return Err(ParseLongAlgebraicError::WrongColor);
@@ -147,11 +148,10 @@ impl Move {
                 "r" => m.flags.set(MoveFlags::PROMOTE_ROOK, true),
                 "b" => m.flags.set(MoveFlags::PROMOTE_BISHOP, true),
                 "n" => m.flags.set(MoveFlags::PROMOTE_KNIGHT, true),
-                _ => return Err(ParseLongAlgebraicError::BadPromotion)
+                _ => return Err(ParseLongAlgebraicError::BadPromotion),
             }
         }
 
         Ok(m)
     }
-
 }

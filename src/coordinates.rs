@@ -158,7 +158,9 @@ impl BoardPos {
 
     pub const fn manhattan_distance(&self, other: &BoardPos) -> u8 {
         (self.rank.to_num() as i16 + self.file.to_num() as i16
-            - other.rank.to_num() as i16 - other.file.to_num() as i16).abs() as u8
+            - other.rank.to_num() as i16
+            - other.file.to_num() as i16)
+            .abs() as u8
     }
 }
 
@@ -169,9 +171,9 @@ impl From<(Rank, File)> for BoardPos {
 }
 
 pub mod consts {
-    use super::Rank::*;
-    use super::File::*;
     use super::BoardPos;
+    use super::File::*;
+    use super::Rank::*;
 
     pub const A1: BoardPos = BoardPos::from_file_rank(A, R1);
     pub const B1: BoardPos = BoardPos::from_file_rank(B, R1);
@@ -244,9 +246,9 @@ pub mod proptest_helpers {
     use super::*;
 
     use proptest::strategy::{Just, Strategy};
-    use proptest::{ prop_oneof, prop_compose};
+    use proptest::{prop_compose, prop_oneof};
 
-    pub fn arb_file() -> impl Strategy<Value=File> {
+    pub fn arb_file() -> impl Strategy<Value = File> {
         prop_oneof![
             Just(File::A),
             Just(File::B),
@@ -259,7 +261,7 @@ pub mod proptest_helpers {
         ]
     }
 
-    pub fn arb_rank() -> impl Strategy<Value=Rank> {
+    pub fn arb_rank() -> impl Strategy<Value = Rank> {
         prop_oneof![
             Just(Rank::R1),
             Just(Rank::R2),
@@ -277,13 +279,12 @@ pub mod proptest_helpers {
             BoardPos { file, rank }
         }
     }
-
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::proptest_helpers::*;
+    use super::*;
 
     use proptest::proptest;
 

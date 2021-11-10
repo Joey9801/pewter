@@ -1,5 +1,4 @@
-
-use crate::{BoardPos, Color, File, Piece, Rank, State, CastleRights};
+use crate::{BoardPos, CastleRights, Color, File, Piece, Rank, State};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FenParseError {
@@ -24,18 +23,18 @@ pub enum FenParseError {
 
 fn format_piece_symbol(color: Color, piece: Piece) -> char {
     match (color, piece) {
-        (Color::Black, Piece::Pawn)   => 'p',
-        (Color::Black, Piece::Rook)   => 'r',
+        (Color::Black, Piece::Pawn) => 'p',
+        (Color::Black, Piece::Rook) => 'r',
         (Color::Black, Piece::Knight) => 'n',
         (Color::Black, Piece::Bishop) => 'b',
-        (Color::Black, Piece::King)   => 'k',
-        (Color::Black, Piece::Queen)  => 'q',
-        (Color::White, Piece::Pawn)   => 'P',
-        (Color::White, Piece::Rook)   => 'R',
+        (Color::Black, Piece::King) => 'k',
+        (Color::Black, Piece::Queen) => 'q',
+        (Color::White, Piece::Pawn) => 'P',
+        (Color::White, Piece::Rook) => 'R',
         (Color::White, Piece::Knight) => 'N',
         (Color::White, Piece::Bishop) => 'B',
-        (Color::White, Piece::King)   => 'K',
-        (Color::White, Piece::Queen)  => 'Q',
+        (Color::White, Piece::King) => 'K',
+        (Color::White, Piece::Queen) => 'Q',
     }
 }
 
@@ -53,7 +52,7 @@ fn parse_piece_symbol(symbol: char) -> Result<(Color, Piece), FenParseError> {
         'B' => Ok((Color::White, Piece::Bishop)),
         'K' => Ok((Color::White, Piece::King)),
         'Q' => Ok((Color::White, Piece::Queen)),
-        _ => Err(FenParseError::InvalidPieceChar(symbol))
+        _ => Err(FenParseError::InvalidPieceChar(symbol)),
     }
 }
 
@@ -103,9 +102,7 @@ pub fn parse_fen(fen_str: &str) -> Result<State, FenParseError> {
 
     let mut fields = fen_str.split(" ");
 
-    let placement_str = fields
-        .next()
-        .ok_or(FenParseError::MissingFields)?;
+    let placement_str = fields.next().ok_or(FenParseError::MissingFields)?;
     parse_fen_placements(placement_str, &mut state)?;
 
     match fields.next().map(|s| s.chars().next()).flatten() {
@@ -115,9 +112,7 @@ pub fn parse_fen(fen_str: &str) -> Result<State, FenParseError> {
         None => return Err(FenParseError::MissingFields),
     }
 
-    let castling_str = fields
-        .next()
-        .ok_or(FenParseError::MissingFields)?;
+    let castling_str = fields.next().ok_or(FenParseError::MissingFields)?;
     for c in castling_str.chars() {
         match c {
             'K' => state.castle_rights.insert(CastleRights::WHITE_KINGSIDE),
@@ -125,27 +120,21 @@ pub fn parse_fen(fen_str: &str) -> Result<State, FenParseError> {
             'k' => state.castle_rights.insert(CastleRights::BLACK_KINGSIDE),
             'q' => state.castle_rights.insert(CastleRights::BLACK_QUEENSIDE),
             '-' => (),
-            _ => return Err(FenParseError::InvalidCastlingRightsChar(c))
+            _ => return Err(FenParseError::InvalidCastlingRightsChar(c)),
         }
     }
 
-    let en_passant_str = fields
-        .next()
-        .ok_or(FenParseError::MissingFields)?;
-    state.en_passant_file = BoardPos::from_algebraic(en_passant_str)
-        .map(|b| b.file);
+    let en_passant_str = fields.next().ok_or(FenParseError::MissingFields)?;
+    state.en_passant_file = BoardPos::from_algebraic(en_passant_str).map(|b| b.file);
 
-    let halfmove_clock_str = fields
-        .next()
-        .ok_or(FenParseError::MissingFields)?;
-    state.halfmove_clock = halfmove_clock_str.parse()
+    let halfmove_clock_str = fields.next().ok_or(FenParseError::MissingFields)?;
+    state.halfmove_clock = halfmove_clock_str
+        .parse()
         .map_err(|_| FenParseError::InvalidNumber)?;
-    
 
-    let fullmove_counter_str = fields
-        .next()
-        .ok_or(FenParseError::MissingFields)?;
-    state.fullmove_counter = fullmove_counter_str.parse()
+    let fullmove_counter_str = fields.next().ok_or(FenParseError::MissingFields)?;
+    state.fullmove_counter = fullmove_counter_str
+        .parse()
         .map_err(|_| FenParseError::InvalidNumber)?;
 
     if fields.next().is_some() {
@@ -154,7 +143,6 @@ pub fn parse_fen(fen_str: &str) -> Result<State, FenParseError> {
         Ok(state)
     }
 }
-
 
 fn format_fen_positions(state: &State, out: &mut String) {
     for rank in FEN_RANKS.iter() {
@@ -168,7 +156,7 @@ fn format_fen_positions(state: &State, out: &mut String) {
                         empty_squares = 0;
                     }
                     out.push_str(&format!("{}", format_piece_symbol(color, piece)));
-                },
+                }
                 None => empty_squares += 1,
             };
         }
@@ -220,7 +208,10 @@ pub fn format_fen(state: &State) -> String {
         out.push_str(" -");
     }
 
-    out.push_str(&format!(" {} {}", state.halfmove_clock, state.fullmove_counter));
+    out.push_str(&format!(
+        " {} {}",
+        state.halfmove_clock, state.fullmove_counter
+    ));
 
     out
 }
@@ -229,9 +220,8 @@ pub fn format_fen(state: &State) -> String {
 mod tests {
     use super::*;
 
-    const FEN_EXAMPLES: [&'static str; 1] = [
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-    ];
+    const FEN_EXAMPLES: [&'static str; 1] =
+        ["rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"];
 
     #[test]
     fn test_fen_parse_roundtrips() {

@@ -1,15 +1,14 @@
-use variant_count::VariantCount;
 use bitflags::bitflags;
+use variant_count::VariantCount;
 
-pub mod coordinates;
 pub mod bitboard;
-pub mod fen;
 pub mod chessmove;
+pub mod coordinates;
+pub mod fen;
 
 use bitboard::BitBoard;
-use coordinates::{Rank, File, BoardPos, consts::*};
 use chessmove::{Move, MoveFlags};
-
+use coordinates::{consts::*, BoardPos, File, Rank};
 
 #[derive(Clone, Copy, Debug, VariantCount, PartialEq, Eq)]
 pub enum Piece {
@@ -45,7 +44,6 @@ impl Piece {
         }
     }
 }
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Color {
@@ -123,11 +121,11 @@ impl State {
             Color::White => {
                 self.white_union_bitboard.set(pos);
                 self.white_bitboards[piece.to_num() as usize].set(pos);
-            },
+            }
             Color::Black => {
                 self.black_union_bitboard.set(pos);
                 self.black_bitboards[piece.to_num() as usize].set(pos);
-            },
+            }
         }
 
         self.all_union_bitboard.set(pos);
@@ -214,9 +212,17 @@ impl State {
         let kingside = m.flags.contains(MoveFlags::CASTLE_KINGSIDE);
 
         let req_flag = if self.to_play == Color::Black {
-            if kingside { CastleRights::BLACK_KINGSIDE } else { CastleRights::BLACK_QUEENSIDE }
+            if kingside {
+                CastleRights::BLACK_KINGSIDE
+            } else {
+                CastleRights::BLACK_QUEENSIDE
+            }
         } else {
-            if kingside { CastleRights::WHITE_KINGSIDE } else { CastleRights::WHITE_QUEENSIDE }
+            if kingside {
+                CastleRights::WHITE_KINGSIDE
+            } else {
+                CastleRights::WHITE_QUEENSIDE
+            }
         };
         debug_assert!(self.castle_rights.contains(req_flag));
 
@@ -306,7 +312,7 @@ impl State {
         // Handle en-passant captures
         if m.flags.contains(MoveFlags::EP_CAPTURE) {
             debug_assert!(self.en_passant_file == Some(m.to.file));
-            
+
             // The pos that we expect to find the ep-capturable pawn
             let ep_pawn_pos = match !self.to_play {
                 Color::White => BoardPos::from_file_rank(m.to.file, Rank::R4),
@@ -359,16 +365,13 @@ mod test {
     use crate::fen::{format_fen, parse_fen};
 
     use proptest::strategy::{Just, Strategy};
-    use proptest::{proptest, prop_oneof};
+    use proptest::{prop_oneof, proptest};
 
-    fn arb_color() -> impl Strategy<Value=Color> {
-        prop_oneof![
-            Just(Color::White),
-            Just(Color::Black),
-        ]
+    fn arb_color() -> impl Strategy<Value = Color> {
+        prop_oneof![Just(Color::White), Just(Color::Black),]
     }
 
-    fn arb_piece() -> impl Strategy<Value=Piece> {
+    fn arb_piece() -> impl Strategy<Value = Piece> {
         prop_oneof![
             Just(Piece::Pawn),
             Just(Piece::Rook),
@@ -410,8 +413,8 @@ mod test {
     }
 
     fn test_apply_move_helper(fen_start: &str, lan_move: &str, expected_fen_end: &str) {
-        let mut state = parse_fen(fen_start)
-            .expect("Expected test case to have valid starting FEN string");
+        let mut state =
+            parse_fen(fen_start).expect("Expected test case to have valid starting FEN string");
         let m = Move::from_long_algebraic(&state, lan_move)
             .expect("Expected test case to have valid LAN move string");
 
@@ -425,7 +428,7 @@ mod test {
         test_apply_move_helper(
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
             "e2e4",
-            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
         )
     }
 
@@ -434,7 +437,7 @@ mod test {
         test_apply_move_helper(
             "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
             "c7c5",
-            "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2"
+            "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2",
         )
     }
 
@@ -443,7 +446,7 @@ mod test {
         test_apply_move_helper(
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R w KQkq - 0 1",
             "e1g1",
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQ1RK1 b kq - 1 1"
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQ1RK1 b kq - 1 1",
         )
     }
 }

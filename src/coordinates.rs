@@ -129,6 +129,32 @@ impl BoardPos {
 
         Some(Self { rank, file })
     }
+
+    pub fn to_algebraic(&self) -> String {
+        let file = match self.file {
+            File::A => 'a',
+            File::B => 'b',
+            File::C => 'c',
+            File::D => 'd',
+            File::E => 'e',
+            File::F => 'f',
+            File::G => 'g',
+            File::H => 'h',
+        };
+
+        let rank = match self.rank {
+            Rank::R1 => '1',
+            Rank::R2 => '2',
+            Rank::R3 => '3',
+            Rank::R4 => '4',
+            Rank::R5 => '5',
+            Rank::R6 => '6',
+            Rank::R7 => '7',
+            Rank::R8 => '8',
+        };
+
+        format!("{}{}", rank, file)
+    }
 }
 
 impl From<(Rank, File)> for BoardPos {

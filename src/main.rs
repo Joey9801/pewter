@@ -107,7 +107,7 @@ bitflags! {
 impl MoveFlags {
     const fn promoted_piece(&self) -> Option<Piece> {
         if self.intersects(MoveFlags::ANY_PROMOTE) {
-            if self.intersects(MoveFlags::PROMOTE_QUEEN | MoveFlags::PROMOTE_ROOK) {
+            if self.intersects(MoveFlags::PROMOTE_QUEEN.union(MoveFlags::PROMOTE_ROOK)) {
                 if self.contains(MoveFlags::PROMOTE_QUEEN) {
                     Some(Piece::Queen)
                 } else {
@@ -240,6 +240,8 @@ impl State {
         let cu_bb = self.color_union_bitboard_mut(color);
         debug_assert!(!cu_bb[pos]);
         cu_bb.set(pos);
+
+        self.all_union_bitboard.set(pos);
     }
 
     fn clear(&mut self, color: Color, piece: Piece, pos: BoardPos) {
@@ -250,6 +252,26 @@ impl State {
         let cu_bb = self.color_union_bitboard_mut(color);
         debug_assert!(cu_bb[pos]);
         cu_bb.clear(pos);
+
+        self.all_union_bitboard.clear(pos);
+    }
+
+    fn get(&self, pos: BoardPos) -> Option<(Color, Piece)> {
+        let color = if self.white_union_bitboard[pos] {
+            Color::White
+        } else if self.black_union_bitboard[pos] {
+            Color::Black
+        } else {
+            return None;
+        };
+
+        for piece in (0..Piece::VARIANT_COUNT as u8).map(|x| Piece::from_num(x)) {
+            if self.bitboard(color, piece)[pos] {
+                return Some((color, piece));
+            }
+        }
+
+        unreachable!()
     }
 
     /// Applies a move, panicking if the move doesn't fit.

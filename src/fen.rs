@@ -1,5 +1,5 @@
 
-use crate::{BoardPos, Color, File, Piece, Rank, State, StateFlags};
+use crate::{BoardPos, Color, File, Piece, Rank, State, CastleRights};
 
 pub enum FenParseError {
     MissingFields,
@@ -102,10 +102,10 @@ pub fn parse_fen(fen_str: &str) -> Result<State, FenParseError> {
         .ok_or(FenParseError::MissingFields)?;
     for c in castling_str.chars() {
         match c {
-            'K' => state.flags.insert(StateFlags::WHITE_CR_KS),
-            'Q' => state.flags.insert(StateFlags::WHITE_CR_QS),
-            'k' => state.flags.insert(StateFlags::BLACK_CR_KS),
-            'q' => state.flags.insert(StateFlags::BLACK_CR_QS),
+            'K' => state.castle_rights.insert(CastleRights::WHITE_CR_KS),
+            'Q' => state.castle_rights.insert(CastleRights::WHITE_CR_QS),
+            'k' => state.castle_rights.insert(CastleRights::BLACK_CR_KS),
+            'q' => state.castle_rights.insert(CastleRights::BLACK_CR_QS),
             '-' => (),
             _ => return Err(FenParseError::InvalidCastlingRightsChar(c))
         }

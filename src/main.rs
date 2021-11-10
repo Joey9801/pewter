@@ -4,9 +4,11 @@ use bitflags::bitflags;
 pub mod coordinates;
 pub mod bitboard;
 pub mod fen;
+pub mod chessmove;
 
 use bitboard::BitBoard;
 use coordinates::{Rank, File, BoardPos, consts::*};
+use chessmove::{Move, MoveFlags};
 
 
 #[derive(Clone, Copy, Debug, VariantCount, PartialEq, Eq)]
@@ -63,87 +65,14 @@ impl std::ops::Not for Color {
 }
 
 bitflags! {
-    pub struct MoveFlags: u16 {
-        const CR_WHITE_KS_MAINTAIN = 0b0001;
-        const CR_WHITE_QS_MAINTAIN = 0b0010;
-        const CR_BLACK_KS_MAINTAIN = 0b0100;
-        const CR_BLACK_QS_MAINTAIN = 0b1000;
-        const CR_MAINTAIN_MASK = 
-            Self::CR_WHITE_KS_MAINTAIN.bits |
-            Self::CR_WHITE_QS_MAINTAIN.bits |
-            Self::CR_BLACK_KS_MAINTAIN.bits |
-            Self::CR_BLACK_QS_MAINTAIN.bits;
-
-        const CASTLE_KINGSIDE  = 0b0001_0000;
-        const CASTLE_QUEENSIDE = 0b0010_0000;
-        const ANY_CASTLING = Self::CASTLE_KINGSIDE.bits | Self::CASTLE_QUEENSIDE.bits;
-
-        // This move is an en-passant capture
-        const EP_CAPTURE = 0b0100_0000;
-
-        // The double jump of a pawn as its first move
-        const DOUBLE_PAWN = 0b1000_0000;
-
-        const SPECIAL_MOVE =
-            Self::ANY_CASTLING.bits |
-            Self::EP_CAPTURE.bits |
-            Self::DOUBLE_PAWN.bits;
-
-        // This was a pawn move to the last rank, and it is being promoted into
-        // something
-        const PROMOTE_QUEEN  = 0b0001_0000_0000;
-        const PROMOTE_ROOK   = 0b0010_0000_0000;
-        const PROMOTE_BISHOP = 0b0100_0000_0000;
-        const PROMOTE_KNIGHT = 0b1000_0000_0000;
-
-        const ANY_PROMOTE =
-            Self::PROMOTE_QUEEN.bits |
-            Self::PROMOTE_ROOK.bits |
-            Self::PROMOTE_BISHOP.bits |
-            Self::PROMOTE_KNIGHT.bits;
-    }
-}
-
-impl MoveFlags {
-    const fn promoted_piece(&self) -> Option<Piece> {
-        if self.intersects(MoveFlags::ANY_PROMOTE) {
-            if self.intersects(MoveFlags::PROMOTE_QUEEN.union(MoveFlags::PROMOTE_ROOK)) {
-                if self.contains(MoveFlags::PROMOTE_QUEEN) {
-                    Some(Piece::Queen)
-                } else {
-                    Some(Piece::Rook)
-                }
-            } else {
-                if self.contains(MoveFlags::PROMOTE_BISHOP) {
-                    Some(Piece::Bishop)
-                } else {
-                    Some(Piece::Knight)
-                }
-            }
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Move {
-    pub from: BoardPos,
-    pub to: BoardPos,
-
-    pub piece: Piece,
-    pub capture_piece: Option<Piece>,
-
-    pub flags: MoveFlags,
-}
-
-bitflags! {
-    // NB: Intentionally laid out the same as the first four bits of MoveFlags.
     pub struct CastleRights: u8 {
         const WHITE_KINGSIDE  = 0b0001;
         const WHITE_QUEENSIDE = 0b0010;
         const BLACK_KINGSIDE  = 0b0100;
         const BLACK_QUEENSIDE = 0b1000;
+
+        const ALL_WHITE = Self::WHITE_KINGSIDE.bits | Self::WHITE_QUEENSIDE.bits;
+        const ALL_BLACK = Self::BLACK_KINGSIDE.bits | Self::BLACK_QUEENSIDE.bits;
     }
 }
 
@@ -302,27 +231,87 @@ impl State {
         // Handle castling
         if m.flags.intersects(MoveFlags::ANY_CASTLING) {
             // For a castling move, the regular move fields should describe the
-            // movement of the rook. This block handles the movement of the king.
-            debug_assert!(m.piece == Piece::Rook);
+            // movement of the king. This block handles the movement of the rook
+            debug_assert!(m.piece == Piece::King);
             debug_assert!(m.capture_piece.is_none());
 
             let kingside = m.flags.contains(MoveFlags::CASTLE_KINGSIDE);
-            let from = match self.to_play {
-                Color::White => E1,
-                Color::Black => E8,
+
+            let req_flag = if self.to_play == Color::Black {
+                if kingside { CastleRights::BLACK_KINGSIDE } else { CastleRights::BLACK_QUEENSIDE }
+            } else {
+                if kingside { CastleRights::WHITE_KINGSIDE } else { CastleRights::WHITE_QUEENSIDE }
+            };
+            debug_assert!(self.castle_rights.contains(req_flag));
+
+            let from = match (self.to_play, kingside) {
+                (Color::White, true) => H1,
+                (Color::White, false) => A1,
+                (Color::Black, true) => H8,
+                (Color::Black, false) => A8,
             };
             let to = match (self.to_play, kingside) {
-                (Color::White, true) => G1,
-                (Color::White, false) => C1,
-                (Color::Black, true) => G8,
-                (Color::Black, false) => C8,
+                (Color::White, true) => F1,
+                (Color::White, false) => D1,
+                (Color::Black, true) => F8,
+                (Color::Black, false) => D8,
             };
-            self.clear(self.to_play, Piece::King, from);
-            self.set(self.to_play, Piece::King, to);
+            self.clear(self.to_play, Piece::Rook, from);
+            self.set(self.to_play, Piece::Rook, to);
         }
 
         // Update the castling rights
-        self.castle_rights.bits &= (m.flags.bits & MoveFlags::CR_MAINTAIN_MASK.bits) as u8;
+        if m.piece == Piece::King {
+            // Moving the king removes all castling rights
+            match self.to_play {
+                Color::White => {
+                    self.castle_rights.remove(CastleRights::ALL_WHITE);
+                }
+                Color::Black => {
+                    self.castle_rights.remove(CastleRights::ALL_BLACK);
+                }
+            }
+        }
+
+        if m.piece == Piece::Rook {
+            // Moving a rook removes castling rights on that side
+            match self.to_play {
+                Color::White => {
+                    if m.from == A1 {
+                        self.castle_rights.remove(CastleRights::WHITE_QUEENSIDE);
+                    } else if m.from == H1 {
+                        self.castle_rights.remove(CastleRights::WHITE_KINGSIDE);
+                    }
+                }
+                Color::Black => {
+                    if m.from == A8 {
+                        self.castle_rights.remove(CastleRights::BLACK_QUEENSIDE);
+                    } else if m.from == H8 {
+                        self.castle_rights.remove(CastleRights::BLACK_KINGSIDE);
+                    }
+                }
+            }
+        }
+
+        if let Some(Piece::Rook) = m.capture_piece {
+            // Losing a rook means you can no longer castle on that side
+            match !self.to_play {
+                Color::White => {
+                    if m.to == A1 {
+                        self.castle_rights.remove(CastleRights::WHITE_QUEENSIDE);
+                    } else if m.to == H1 {
+                        self.castle_rights.remove(CastleRights::WHITE_KINGSIDE);
+                    }
+                }
+                Color::Black => {
+                    if m.to == A8 {
+                        self.castle_rights.remove(CastleRights::BLACK_QUEENSIDE);
+                    } else if m.to == H8 {
+                        self.castle_rights.remove(CastleRights::BLACK_KINGSIDE);
+                    }
+                }
+            }
+        }
 
         // Update the en-passant capturable state
         if m.flags.contains(MoveFlags::DOUBLE_PAWN) {
@@ -359,6 +348,7 @@ fn main() {
 mod test {
     use super::*;
     use crate::coordinates::proptest_helpers::*;
+    use crate::fen::{format_fen, parse_fen};
 
     use proptest::strategy::{Just, Strategy};
     use proptest::{proptest, prop_oneof};
@@ -409,5 +399,43 @@ mod test {
             let other_bb = state.bitboard(!color, piece);
             assert!(!other_bb.any());
         }
+    }
+
+    fn test_apply_move_helper(fen_start: &str, lan_move: &str, expected_fen_end: &str) {
+        let mut state = parse_fen(fen_start)
+            .expect("Expected test case to have valid starting FEN string");
+        let m = Move::from_long_algebraic(&state, lan_move)
+            .expect("Expected test case to have valid LAN move string");
+
+        state.apply_move(m);
+
+        assert_eq!(expected_fen_end, format_fen(&state));
+    }
+
+    #[test]
+    fn test_apply_move_1() {
+        test_apply_move_helper(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "e2e4",
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+        )
+    }
+
+    #[test]
+    fn test_apply_move_2() {
+        test_apply_move_helper(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+            "c7c5",
+            "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2"
+        )
+    }
+
+    #[test]
+    fn test_apply_move_3() {
+        test_apply_move_helper(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R w KQkq - 0 1",
+            "e1g1",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQ1RK1 b kq - 1 1"
+        )
     }
 }

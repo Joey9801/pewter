@@ -153,7 +153,12 @@ impl BoardPos {
             Rank::R8 => '8',
         };
 
-        format!("{}{}", rank, file)
+        format!("{}{}", file, rank)
+    }
+
+    pub const fn manhattan_distance(&self, other: &BoardPos) -> u8 {
+        (self.rank.to_num() as i16 + self.file.to_num() as i16
+            - other.rank.to_num() as i16 - other.file.to_num() as i16).abs() as u8
     }
 }
 

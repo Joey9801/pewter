@@ -215,7 +215,6 @@ pub fn format_fen(state: &State) -> String {
             Color::White => BoardPos::from_file_rank(ep_file, Rank::R3),
             Color::Black => BoardPos::from_file_rank(ep_file, Rank::R6),
         };
-        out.push(' ');
         out.push_str(&format!(" {}", ep_pos.to_algebraic()));
     } else {
         out.push_str(" -");

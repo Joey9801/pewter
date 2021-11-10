@@ -203,64 +203,40 @@ impl State {
         unreachable!()
     }
 
-    /// Applies a move, panicking if the move doesn't fit.
-    ///
-    /// When panicking, may leave this object in an invalid state.
-    pub fn apply_move(&mut self, m: Move) {
-        self.clear(self.to_play, m.piece, m.from);
-        self.set(self.to_play, m.piece, m.to);
+    fn apply_castling(&mut self, m: Move) {
+        debug_assert!(m.flags.intersects(MoveFlags::ANY_CASTLING));
 
-        // Handle all regular captures, where the destination square was
-        // previously occupied by the piece being captured
-        if let Some(capture_piece) = m.capture_piece {
-            self.clear(!self.to_play, capture_piece, m.to);
-        }
+        // For a castling move, the regular move fields should describe the
+        // movement of the king. This block handles the movement of the rook
+        debug_assert!(m.piece == Piece::King);
+        debug_assert!(m.capture_piece.is_none());
 
-        // Handle en-passant captures
-        if m.flags.contains(MoveFlags::EP_CAPTURE) {
-            debug_assert!(self.en_passant_file == Some(m.to.file));
-            
-            // The pos that we expect to find the ep-capturable pawn
-            let ep_pawn_pos = match !self.to_play {
-                Color::White => BoardPos::from_file_rank(m.to.file, Rank::R4),
-                Color::Black => BoardPos::from_file_rank(m.to.file, Rank::R5),
-            };
-            self.clear(!self.to_play, Piece::Pawn, ep_pawn_pos);
-        }
+        let kingside = m.flags.contains(MoveFlags::CASTLE_KINGSIDE);
 
-        // Handle castling
-        if m.flags.intersects(MoveFlags::ANY_CASTLING) {
-            // For a castling move, the regular move fields should describe the
-            // movement of the king. This block handles the movement of the rook
-            debug_assert!(m.piece == Piece::King);
-            debug_assert!(m.capture_piece.is_none());
+        let req_flag = if self.to_play == Color::Black {
+            if kingside { CastleRights::BLACK_KINGSIDE } else { CastleRights::BLACK_QUEENSIDE }
+        } else {
+            if kingside { CastleRights::WHITE_KINGSIDE } else { CastleRights::WHITE_QUEENSIDE }
+        };
+        debug_assert!(self.castle_rights.contains(req_flag));
 
-            let kingside = m.flags.contains(MoveFlags::CASTLE_KINGSIDE);
+        let from = match (self.to_play, kingside) {
+            (Color::White, true) => H1,
+            (Color::White, false) => A1,
+            (Color::Black, true) => H8,
+            (Color::Black, false) => A8,
+        };
+        let to = match (self.to_play, kingside) {
+            (Color::White, true) => F1,
+            (Color::White, false) => D1,
+            (Color::Black, true) => F8,
+            (Color::Black, false) => D8,
+        };
+        self.clear(self.to_play, Piece::Rook, from);
+        self.set(self.to_play, Piece::Rook, to);
+    }
 
-            let req_flag = if self.to_play == Color::Black {
-                if kingside { CastleRights::BLACK_KINGSIDE } else { CastleRights::BLACK_QUEENSIDE }
-            } else {
-                if kingside { CastleRights::WHITE_KINGSIDE } else { CastleRights::WHITE_QUEENSIDE }
-            };
-            debug_assert!(self.castle_rights.contains(req_flag));
-
-            let from = match (self.to_play, kingside) {
-                (Color::White, true) => H1,
-                (Color::White, false) => A1,
-                (Color::Black, true) => H8,
-                (Color::Black, false) => A8,
-            };
-            let to = match (self.to_play, kingside) {
-                (Color::White, true) => F1,
-                (Color::White, false) => D1,
-                (Color::Black, true) => F8,
-                (Color::Black, false) => D8,
-            };
-            self.clear(self.to_play, Piece::Rook, from);
-            self.set(self.to_play, Piece::Rook, to);
-        }
-
-        // Update the castling rights
+    fn update_castling_rights(&mut self, m: Move) {
         if m.piece == Piece::King {
             // Moving the king removes all castling rights
             match self.to_play {
@@ -312,7 +288,39 @@ impl State {
                 }
             }
         }
+    }
 
+    /// Applies a move, panicking if the move doesn't fit.
+    ///
+    /// When panicking, may leave this object in an invalid state.
+    pub fn apply_move(&mut self, m: Move) {
+        self.clear(self.to_play, m.piece, m.from);
+        self.set(self.to_play, m.piece, m.to);
+
+        // Handle all regular captures, where the destination square was
+        // previously occupied by the piece being captured
+        if let Some(capture_piece) = m.capture_piece {
+            self.clear(!self.to_play, capture_piece, m.to);
+        }
+
+        // Handle en-passant captures
+        if m.flags.contains(MoveFlags::EP_CAPTURE) {
+            debug_assert!(self.en_passant_file == Some(m.to.file));
+            
+            // The pos that we expect to find the ep-capturable pawn
+            let ep_pawn_pos = match !self.to_play {
+                Color::White => BoardPos::from_file_rank(m.to.file, Rank::R4),
+                Color::Black => BoardPos::from_file_rank(m.to.file, Rank::R5),
+            };
+            self.clear(!self.to_play, Piece::Pawn, ep_pawn_pos);
+        }
+
+        if m.flags.intersects(MoveFlags::ANY_CASTLING) {
+            self.apply_castling(m);
+        }
+        self.update_castling_rights(m);
+
+        // Update the castling rights
         // Update the en-passant capturable state
         if m.flags.contains(MoveFlags::DOUBLE_PAWN) {
             self.en_passant_file = Some(m.from.file);

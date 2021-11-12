@@ -154,4 +154,20 @@ impl Move {
 
         Ok(m)
     }
+
+    pub fn format_long_algebraic(&self) -> String {
+        let mut out = format!("{}{}", self.from.to_algebraic(), self.to.to_algebraic());
+
+        if let Some(promotion) = self.flags.promoted_piece() {
+            out.push(match promotion {
+                Piece::Rook => 'q',
+                Piece::Knight => 'n',
+                Piece::Bishop => 'b',
+                Piece::Queen => 'q',
+                _ => unreachable!(),
+            });
+        }
+
+        out
+    }
 }

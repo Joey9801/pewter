@@ -5,6 +5,7 @@ pub mod bitboard;
 pub mod chessmove;
 pub mod coordinates;
 pub mod fen;
+pub mod movegen;
 
 use bitboard::BitBoard;
 use chessmove::{Move, MoveFlags};

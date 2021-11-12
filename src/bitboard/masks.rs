@@ -105,25 +105,6 @@ const DIAG_LOOKUP: [BitBoard; 30] = [
     BitBoard(0x00_00_00_00_00_00_00_80),
 ];
 
-enum DiagonalType {
-    Diagonal,
-    AntiDiagonal,
-}
-
-const fn diag_lookup_idx(pos: BoardPos, diag_type: DiagonalType) -> usize {
-    let offset = match diag_type {
-        DiagonalType::Diagonal => 22,
-        DiagonalType::AntiDiagonal => 0,
-    };
-
-    let ranknum_mul = match diag_type {
-        DiagonalType::Diagonal => -1,
-        DiagonalType::AntiDiagonal => 1,
-    };
-
-    (pos.file.to_num() as i32 + (ranknum_mul * pos.rank.to_num() as i32) + offset) as usize
-}
-
 pub const fn diagonal(pos: BoardPos) -> BitBoard {
     DIAG_LOOKUP[(pos.file.to_num() + 22 - pos.rank.to_num()) as usize]
 }
@@ -162,8 +143,10 @@ mod test {
         let mut diag_table = [BitBoard::new_empty(); 30];
 
         for pos in BoardPos::iter_all() {
-            diag_table[diag_lookup_idx(pos, DiagonalType::Diagonal)].set(pos);
-            diag_table[diag_lookup_idx(pos, DiagonalType::AntiDiagonal)].set(pos);
+            let fnum = pos.file.to_num() as i32;
+            let rnum = pos.rank.to_num() as i32;
+            diag_table[(fnum + rnum) as usize].set(pos);
+            diag_table[(fnum - rnum + 22) as usize].set(pos);
         }
 
         for bb in diag_table.iter() {

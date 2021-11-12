@@ -208,7 +208,7 @@ fn rook_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::fen::parse_fen;
+    use crate::io::fen::parse_fen;
 
     #[test]
     fn count_moves_from_starting() {

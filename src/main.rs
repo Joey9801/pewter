@@ -4,8 +4,8 @@ use variant_count::VariantCount;
 pub mod bitboard;
 pub mod chessmove;
 pub mod coordinates;
-pub mod fen;
 pub mod movegen;
+pub mod io;
 
 use bitboard::BitBoard;
 use chessmove::{Move, MoveFlags};
@@ -42,6 +42,17 @@ impl Piece {
             4 => Piece::King,
             5 => Piece::Queen,
             _ => panic!("Invalid piece num"),
+        }
+    }
+
+    pub const fn to_char(&self) -> char {
+        match self {
+            Piece::Pawn => 'p',
+            Piece::Rook => 'r',
+            Piece::Knight => 'n',
+            Piece::Bishop => 'b',
+            Piece::King => 'k',
+            Piece::Queen => 'q',
         }
     }
 }
@@ -297,6 +308,23 @@ impl State {
         }
     }
 
+    pub fn pretty_format(&self) -> String {
+        use crate::io::ascii::pretty_format;
+
+        fn sym(val: Option<(Color, Piece)>) -> char {
+            if let Some((color, piece)) = val {
+                match color {
+                    Color::White => piece.to_char().to_ascii_uppercase(),
+                    Color::Black => piece.to_char(),
+                }
+            } else {
+                ' '
+            }
+        }
+
+        pretty_format(|pos| sym(self.get(pos)))
+    }
+
     /// Applies a move, panicking if the move doesn't fit.
     ///
     /// When panicking, may leave this object in an invalid state.
@@ -356,16 +384,19 @@ impl State {
 }
 
 fn main() {
-    println!("{}", bitboard::masks::color_squares(Color::Black).pretty_format());
+    use crate::io::fen::parse_fen;
+
+    println!("{}", bitboard::masks::edges().pretty_format());
     println!("{}", bitboard::masks::diagonal(F4).pretty_format());
     println!("{}", bitboard::masks::antidiagonal(G7).pretty_format());
+    println!("{}", parse_fen( "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap().pretty_format());
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::coordinates::proptest_helpers::*;
-    use crate::fen::{format_fen, parse_fen};
+    use crate::io::fen::{format_fen, parse_fen};
 
     use proptest::strategy::{Just, Strategy};
     use proptest::{prop_oneof, proptest};

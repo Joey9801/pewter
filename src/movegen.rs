@@ -1,4 +1,10 @@
-use crate::{Piece, State, chessmove::{Move, MoveFlags}, coordinates::{BoardPos, File, Rank}};
+use crate::{Piece, State, bitboard::BitBoard, chessmove::Move, coordinates::{BoardPos, File, Rank}};
+
+pub struct MoveSet {
+    pub source: BoardPos,
+    pub dest_set: BitBoard,
+    pub promotion: bool,
+}
 
 pub fn all_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
     pawn_psuedo_legal(state, moves);
@@ -17,9 +23,7 @@ fn pawn_psuedo_legal(state: &State, moves: &mut Vec<Move>) {
                 moves.push(Move {
                     from,
                     to: one_up_to,
-                    piece: Piece::Pawn,
-                    capture_piece: None,
-                    flags: MoveFlags::empty(),
+                    promotion: None,
                 });
 
 
@@ -32,9 +36,7 @@ fn pawn_psuedo_legal(state: &State, moves: &mut Vec<Move>) {
                             moves.push(Move {
                                 from,
                                 to: two_up_to,
-                                piece: Piece::Pawn,
-                                capture_piece: None,
-                                flags: MoveFlags::DOUBLE_PAWN,
+                                promotion: None,
                             });
                         }
                     }
@@ -73,21 +75,10 @@ fn knight_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
 
             match state.get(to) {
                 Some((c, _)) if c == state.to_play => continue,
-                Some((opp_c, piece)) => {
-                    debug_assert!(opp_c == !state.to_play);
+                _ => {
                     moves.push(Move {
                         from, to,
-                        piece: Piece::Knight,
-                        capture_piece: Some(piece),
-                        flags: MoveFlags::empty(),
-                    });
-                }
-                None => {
-                    moves.push(Move {
-                        from, to,
-                        piece: Piece::Knight,
-                        capture_piece: None,
-                        flags: MoveFlags::empty(),
+                        promotion: None,
                     });
                 }
             }
@@ -126,22 +117,10 @@ fn bishop_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
 
                 match state.get(to) {
                     Some((c, _)) if c == state.to_play => break,
-                    Some((opp_c, piece)) => {
-                        debug_assert!(opp_c == !state.to_play);
+                    _ => {
                         moves.push(Move {
                             from, to,
-                            piece: Piece::Bishop,
-                            capture_piece: Some(piece),
-                            flags: MoveFlags::empty(),
-                        });
-                        break;
-                    }
-                    None => {
-                        moves.push(Move {
-                            from, to,
-                            piece: Piece::Bishop,
-                            capture_piece: None,
-                            flags: MoveFlags::empty(),
+                            promotion: None,
                         });
                     }
                 }
@@ -181,22 +160,10 @@ fn rook_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
 
                 match state.get(to) {
                     Some((c, _)) if c == state.to_play => break,
-                    Some((opp_c, piece)) => {
-                        debug_assert!(opp_c == !state.to_play);
+                    _ => {
                         moves.push(Move {
                             from, to,
-                            piece: Piece::Rook,
-                            capture_piece: Some(piece),
-                            flags: MoveFlags::empty(),
-                        });
-                        break;
-                    }
-                    None => {
-                        moves.push(Move {
-                            from, to,
-                            piece: Piece::Rook,
-                            capture_piece: None,
-                            flags: MoveFlags::empty(),
+                            promotion: None,
                         });
                     }
                 }

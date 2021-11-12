@@ -1,4 +1,4 @@
-use crate::{Color, coordinates::{BoardPos, File, Rank}};
+use crate::{Color, coordinates::{BoardPos, File, Rank, consts::*}};
 
 use super::BitBoard;
 
@@ -65,13 +65,14 @@ pub const fn color_squares(color: Color) -> BitBoard {
 
 // Diagonals go in two directions
 //    Where the file number - the rank number is constant (diagonals)
-//       eg F1, G2, H3
+//       eg [F1, G2, H3]
 //    Where the file number + the rank number is constant (antidiagonals)
-//       Eg A3, B2, C1
+//       Eg [A3, B2, C1]
 //
 // Label antidiagonals by the value of `filenum + ranknum` (values 0..=14)
 // Label diagonals by the value of `filenum - ranknum + 21` (values 15..=29)
-// Then can store the 30 diagonal mask bitboards in a single lookup table
+// Then can store the 30 diagonal mask bitboards in a single lookup table,
+// indexed by those labels
 const DIAG_LOOKUP: [BitBoard; 30] = [
     BitBoard(0x00_00_00_00_00_00_00_01),
     BitBoard(0x00_00_00_00_00_00_01_02),
@@ -113,22 +114,57 @@ pub const fn antidiagonal(pos: BoardPos) -> BitBoard {
     DIAG_LOOKUP[(pos.file.to_num() + pos.rank.to_num()) as usize]
 }
 
+/// The squares a rook could move to if there were no other pieces on the board
+///
+/// Doesn't include the stating square
 pub const fn rook_rays(pos: BoardPos) -> BitBoard {
     BitBoard::new_empty()
         .union_with(rank(pos.rank))
         .union_with(file(pos.file))
-        .intersect_with(BitBoard::from_pos(pos).inverse())
+        .intersect_with(BitBoard::single(pos).inverse())
 }
 
+/// The squares a bishop could move to if there were no other pieces on the board
+///
+/// Doesn't include the stating square
 pub const fn bishop_rays(pos: BoardPos) -> BitBoard {
     BitBoard::new_empty()
         .union_with(diagonal(pos))
         .union_with(antidiagonal(pos))
-        .intersect_with(BitBoard::from_pos(pos).inverse())
+        .intersect_with(BitBoard::single(pos).inverse())
 }
 
-pub const fn queen_rays(pos: BoardPos) -> BitBoard {
-    rook_rays(pos).union_with(bishop_rays(pos))
+/// All kingside castling moves
+pub const fn castling_moves_kingside() -> BitBoard {
+    BitBoard::new_empty()
+        .with_set(E1)
+        .with_set(G1)
+        .with_set(E8)
+        .with_set(G8)
+}
+
+/// All kingside castling moves
+pub const fn castling_moves_queenside() -> BitBoard {
+    BitBoard::new_empty()
+        .with_set(E1)
+        .with_set(C1)
+        .with_set(E8)
+        .with_set(C8)
+}
+
+/// The union of all castling moves
+pub const fn castling_moves_all() -> BitBoard {
+    BitBoard::new_empty()
+        .union_with(castling_moves_kingside())
+        .union_with(castling_moves_queenside())
+}
+
+pub const fn double_pawn_moves() -> BitBoard {
+    BitBoard::new_empty()
+        .union_with(rank(Rank::R2))
+        .union_with(rank(Rank::R4))
+        .union_with(rank(Rank::R7))
+        .union_with(rank(Rank::R5))
 }
 
 #[cfg(test)]

@@ -7,8 +7,8 @@ pub mod coordinates;
 pub mod movegen;
 pub mod io;
 
-use bitboard::BitBoard;
-use chessmove::{Move, MoveFlags};
+use bitboard::{BitBoard, masks::*};
+use chessmove::Move;
 use coordinates::{consts::*, BoardPos, File, Rank};
 
 #[derive(Clone, Copy, Debug, VariantCount, PartialEq, Eq)]
@@ -91,8 +91,8 @@ pub struct State {
 
     pub castle_rights: CastleRights,
 
-    /// If the previous move was advancing a pawn two spaces, the file of that pawn
-    pub en_passant_file: Option<File>,
+    /// If the previous move was advancing a pawn two spaces, the position that the pawn skipped
+    pub en_passant: Option<BoardPos>,
 
     /// Number of halfmoves since the last capture of pawn advance
     pub halfmove_clock: u8,
@@ -113,7 +113,7 @@ impl State {
         Self {
             to_play: Color::White,
             castle_rights: CastleRights::empty(),
-            en_passant_file: None,
+            en_passant: None,
             halfmove_clock: 0,
             fullmove_counter: 0,
             white_bitboards: [BitBoard::new_empty(); Piece::VARIANT_COUNT],
@@ -213,15 +213,8 @@ impl State {
         unreachable!()
     }
 
-    fn apply_castling(&mut self, m: Move) {
-        debug_assert!(m.flags.intersects(MoveFlags::ANY_CASTLING));
-
-        // For a castling move, the regular move fields should describe the
-        // movement of the king. This block handles the movement of the rook
-        debug_assert!(m.piece == Piece::King);
-        debug_assert!(m.capture_piece.is_none());
-
-        let kingside = m.flags.contains(MoveFlags::CASTLE_KINGSIDE);
+    fn apply_castling(&mut self, m: Move, ) {
+        let kingside = m.to.file == File::G;
 
         let req_flag = if self.to_play == Color::Black {
             if kingside {
@@ -254,8 +247,8 @@ impl State {
         self.set(self.to_play, Piece::Rook, to);
     }
 
-    fn update_castling_rights(&mut self, m: Move) {
-        if m.piece == Piece::King {
+    fn update_castling_rights(&mut self, m: Move, piece: Piece, capture_piece: Option<Piece>) {
+        if piece == Piece::King {
             // Moving the king removes all castling rights
             match self.to_play {
                 Color::White => {
@@ -267,7 +260,7 @@ impl State {
             }
         }
 
-        if m.piece == Piece::Rook {
+        if piece == Piece::Rook {
             // Moving a rook removes castling rights on that side
             match self.to_play {
                 Color::White => {
@@ -287,7 +280,7 @@ impl State {
             }
         }
 
-        if let Some(Piece::Rook) = m.capture_piece {
+        if let Some(Piece::Rook) = capture_piece {
             // Losing a rook means you can no longer castle on that side
             match !self.to_play {
                 Color::White => {
@@ -329,18 +322,32 @@ impl State {
     ///
     /// When panicking, may leave this object in an invalid state.
     pub fn apply_move(&mut self, m: Move) {
-        self.clear(self.to_play, m.piece, m.from);
-        self.set(self.to_play, m.piece, m.to);
+        let from_bb = BitBoard::single(m.from);
+        let to_bb = BitBoard::single(m.to);
+        let move_bb = from_bb | to_bb;
+
+        let (_color, piece) = self.get(m.from)
+            .expect("No piece on square being moved");
+        debug_assert!(_color == self.to_play);
+
+        let capture_piece = self.get(m.to)
+            .map(|(c, p)| {
+                debug_assert!(c == !self.to_play);
+                p
+            });
+
+        self.clear(self.to_play, piece, m.from);
+        self.set(self.to_play, piece, m.to);
 
         // Handle all regular captures, where the destination square was
         // previously occupied by the piece being captured
-        if let Some(capture_piece) = m.capture_piece {
+        if let Some(capture_piece) = capture_piece {
             self.clear(!self.to_play, capture_piece, m.to);
         }
 
         // Handle en-passant captures
-        if m.flags.contains(MoveFlags::EP_CAPTURE) {
-            debug_assert!(self.en_passant_file == Some(m.to.file));
+        if self.en_passant == Some(m.to) {
+            debug_assert!(piece == Piece::Pawn);
 
             // The pos that we expect to find the ep-capturable pawn
             let ep_pawn_pos = match !self.to_play {
@@ -350,27 +357,30 @@ impl State {
             self.clear(!self.to_play, Piece::Pawn, ep_pawn_pos);
         }
 
-        if m.flags.intersects(MoveFlags::ANY_CASTLING) {
+        if move_bb & castling_moves_all() == move_bb {
             self.apply_castling(m);
         }
-        self.update_castling_rights(m);
+        self.update_castling_rights(m, piece, capture_piece);
 
-        // Update the castling rights
         // Update the en-passant capturable state
-        if m.flags.contains(MoveFlags::DOUBLE_PAWN) {
-            self.en_passant_file = Some(m.from.file);
+        if (piece == Piece::Pawn) && (move_bb & double_pawn_moves() == move_bb) {
+            let rank = match self.to_play {
+                Color::White => Rank::R3,
+                Color::Black => Rank::R6,
+            };
+            self.en_passant = Some(BoardPos::from_file_rank(m.from.file, rank));
         } else {
-            self.en_passant_file = None;
+            self.en_passant = None;
         }
 
-        if let Some(promoted_piece) = m.flags.promoted_piece() {
-            debug_assert!(m.piece == Piece::Pawn);
+        if let Some(promotion) = m.promotion {
+            debug_assert!(piece == Piece::Pawn);
             debug_assert!(m.to.rank == Rank::R1 || m.to.rank == Rank::R8);
             self.clear(self.to_play, Piece::Pawn, m.to);
-            self.set(self.to_play, promoted_piece, m.to);
+            self.set(self.to_play, promotion, m.to);
         }
 
-        if m.capture_piece.is_some() || m.piece == Piece::Pawn {
+        if capture_piece.is_some() || piece == Piece::Pawn {
             self.halfmove_clock = 0;
         } else {
             self.halfmove_clock += 1;
@@ -449,7 +459,7 @@ mod test {
     fn test_apply_move_helper(fen_start: &str, lan_move: &str, expected_fen_end: &str) {
         let mut state =
             parse_fen(fen_start).expect("Expected test case to have valid starting FEN string");
-        let m = Move::from_long_algebraic(&state, lan_move)
+        let m = Move::from_long_algebraic(lan_move)
             .expect("Expected test case to have valid LAN move string");
 
         state.apply_move(m);

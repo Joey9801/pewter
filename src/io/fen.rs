@@ -125,7 +125,7 @@ pub fn parse_fen(fen_str: &str) -> Result<State, FenParseError> {
     }
 
     let en_passant_str = fields.next().ok_or(FenParseError::MissingFields)?;
-    state.en_passant_file = BoardPos::from_algebraic(en_passant_str).map(|b| b.file);
+    state.en_passant = BoardPos::from_algebraic(en_passant_str);
 
     let halfmove_clock_str = fields.next().ok_or(FenParseError::MissingFields)?;
     state.halfmove_clock = halfmove_clock_str
@@ -198,12 +198,8 @@ pub fn format_fen(state: &State) -> String {
         out.push('-');
     }
 
-    if let Some(ep_file) = state.en_passant_file {
-        let ep_pos = match !state.to_play {
-            Color::White => BoardPos::from_file_rank(ep_file, Rank::R3),
-            Color::Black => BoardPos::from_file_rank(ep_file, Rank::R6),
-        };
-        out.push_str(&format!(" {}", ep_pos.to_algebraic()));
+    if let Some(ep) = state.en_passant {
+        out.push_str(&format!(" {}", ep.to_algebraic()));
     } else {
         out.push_str(" -");
     }

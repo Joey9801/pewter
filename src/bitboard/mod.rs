@@ -14,16 +14,26 @@ impl BitBoard {
         Self(!0u64)
     }
 
-    pub const fn from_pos(pos: BoardPos) -> Self {
+    pub const fn single(pos: BoardPos) -> Self {
         Self(1 << pos.to_bitboard_offset())
     }
 
-    pub fn set(&mut self, pos: BoardPos) {
+    pub const fn with_set(mut self, pos: BoardPos) -> Self {
         self.0 |= 1u64 << pos.to_bitboard_offset();
+        self
+    }
+
+    pub fn set(&mut self, pos: BoardPos) {
+        *self = self.with_set(pos);
+    }
+
+    pub const fn with_cleared(mut self, pos: BoardPos) -> Self {
+        self.0 &= !(1u64 << pos.to_bitboard_offset());
+        self
     }
 
     pub fn clear(&mut self, pos: BoardPos) {
-        self.0 &= !(1u64 << pos.to_bitboard_offset());
+        *self = self.with_cleared(pos);
     }
 
     pub const fn get(&self, pos: BoardPos) -> bool {
@@ -52,6 +62,15 @@ impl BitBoard {
 
     pub const fn inverse(&self) -> Self {
         Self(!self.0)
+    }
+
+    pub const fn first_set(&self) -> Option<BoardPos> {
+        let tzs = self.0.trailing_zeros() as u8;
+        if tzs <= 63 {
+            Some(BoardPos::from_bitboard_offset(tzs))
+        } else {
+            None
+        }
     }
 
     pub fn iter_all(self) -> impl Iterator<Item = BoardPos> {
@@ -111,6 +130,6 @@ impl std::ops::Index<BoardPos> for BitBoard {
 
 impl From<BoardPos> for BitBoard {
     fn from(pos: BoardPos) -> Self {
-        Self::from_pos(pos)
+        Self::single(pos)
     }
 }

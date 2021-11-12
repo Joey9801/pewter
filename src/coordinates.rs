@@ -64,6 +64,11 @@ impl Rank {
             }
         }
     }
+
+    pub const fn all() -> &'static [Self] {
+        use Rank::*;
+        &[R1, R2, R3, R4, R5, R6, R7, R8]
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -104,6 +109,11 @@ impl File {
             7 => File::H,
             _ => panic!("Invalid File number"),
         }
+    }
+
+    pub fn all() -> &'static [Self] {
+        use File::*;
+        &[A, B, C, D, E, F, G, H]
     }
 }
 
@@ -188,6 +198,14 @@ impl BoardPos {
             - other.rank.to_num() as i16
             - other.file.to_num() as i16)
             .abs() as u8
+    }
+
+    #[cfg(test)]
+    pub fn iter_all() -> impl Iterator<Item=Self> {
+        File::all().iter()
+            .flat_map(|f|
+                Rank::all().iter().map(move |r| Self::from_file_rank(*f, *r))
+            )
     }
 }
 

@@ -356,7 +356,9 @@ impl State {
 }
 
 fn main() {
-    println!("Hello, world!");
+    println!("{}", bitboard::masks::color_squares(Color::Black).pretty_format());
+    println!("{}", bitboard::masks::diagonal(F4).pretty_format());
+    println!("{}", bitboard::masks::antidiagonal(G7).pretty_format());
 }
 
 #[cfg(test)]

@@ -1,3 +1,4 @@
+use crate::bitboard::BitBoard;
 use crate::coordinates::BoardPos;
 use crate::Piece;
 
@@ -67,5 +68,78 @@ impl Move {
         }
 
         out
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MoveSet {
+    pub source: BoardPos,
+    pub dest_set: BitBoard,
+    pub promotion: bool,
+}
+
+impl MoveSet {
+    pub fn iter(&self) -> impl Iterator<Item=Move> {
+        MoveSetIter {
+            move_set: *self,
+            promotion_idx: 0,
+        }
+    }
+}
+
+pub struct MoveSetIter {
+    move_set: MoveSet,
+    promotion_idx: u8,
+}
+
+impl Iterator for MoveSetIter {
+    type Item = Move;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(dest) = self.move_set.dest_set.first_set() {
+            let mut m = Move {
+                from: self.move_set.source,
+                to: dest,
+                promotion: None
+            };
+
+            if self.move_set.promotion {
+                match self.promotion_idx % 4 {
+                    0 => m.promotion = Some(Piece::Queen),
+                    1 => m.promotion = Some(Piece::Rook),
+                    2 => m.promotion = Some(Piece::Bishop),
+                    3 => {
+                        m.promotion = Some(Piece::Knight);
+                        self.move_set.dest_set.clear(dest);
+                    }
+                    _ => {
+                        unreachable!()
+                    }
+                }
+
+                self.promotion_idx += 1;
+            }
+
+            Some(m)
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let s = self.move_set.dest_set.count() as usize;
+
+        // 4x as many items if iterating promotions
+        let s = s << if self.move_set.promotion { 2 } else { 0 };
+
+        (s, Some(s))
+    }
+}
+
+impl ExactSizeIterator for MoveSetIter {
+    fn len(&self) -> usize {
+        let (lower, upper) = self.size_hint();
+        debug_assert_eq!(upper, Some(lower));
+        lower
     }
 }

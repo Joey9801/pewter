@@ -1,11 +1,5 @@
 use crate::{Piece, State, bitboard::BitBoard, chessmove::Move, coordinates::{BoardPos, File, Rank}};
 
-pub struct MoveSet {
-    pub source: BoardPos,
-    pub dest_set: BitBoard,
-    pub promotion: bool,
-}
-
 pub fn all_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
     pawn_psuedo_legal(state, moves);
     rook_pseudo_legal(state, moves);

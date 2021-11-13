@@ -1,4 +1,4 @@
-use crate::Color;
+use crate::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rank {
@@ -206,6 +206,10 @@ impl BoardPos {
             .flat_map(|f|
                 Rank::all().iter().map(move |r| Self::from_file_rank(*f, *r))
             )
+    }
+
+    pub const fn const_eq(&self, other: &BoardPos) -> bool {
+        self.to_bitboard_offset() == other.to_bitboard_offset()
     }
 }
 

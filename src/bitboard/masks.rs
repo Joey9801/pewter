@@ -1,4 +1,4 @@
-use crate::{Color, coordinates::{BoardPos, File, Rank, consts::*}};
+use crate::{color::Color, coordinates::{BoardPos, File, Rank, consts::*}};
 
 use super::BitBoard;
 
@@ -63,6 +63,7 @@ pub const fn color_squares(color: Color) -> BitBoard {
     }
 }
 
+
 // Diagonals go in two directions
 //    Where the file number - the rank number is constant (diagonals)
 //       eg [F1, G2, H3]
@@ -73,38 +74,28 @@ pub const fn color_squares(color: Color) -> BitBoard {
 // Label diagonals by the value of `filenum - ranknum + 21` (values 15..=29)
 // Then can store the 30 diagonal mask bitboards in a single lookup table,
 // indexed by those labels
-const DIAG_LOOKUP: [BitBoard; 30] = [
-    BitBoard(0x00_00_00_00_00_00_00_01),
-    BitBoard(0x00_00_00_00_00_00_01_02),
-    BitBoard(0x00_00_00_00_00_01_02_04),
-    BitBoard(0x00_00_00_00_01_02_04_08),
-    BitBoard(0x00_00_00_01_02_04_08_10),
-    BitBoard(0x00_00_01_02_04_08_10_20),
-    BitBoard(0x00_01_02_04_08_10_20_40),
-    BitBoard(0x01_02_04_08_10_20_40_80),
-    BitBoard(0x02_04_08_10_20_40_80_00),
-    BitBoard(0x04_08_10_20_40_80_00_00),
-    BitBoard(0x08_10_20_40_80_00_00_00),
-    BitBoard(0x10_20_40_80_00_00_00_00),
-    BitBoard(0x20_40_80_00_00_00_00_00),
-    BitBoard(0x40_80_00_00_00_00_00_00),
-    BitBoard(0x80_00_00_00_00_00_00_00),
-    BitBoard(0x01_00_00_00_00_00_00_00),
-    BitBoard(0x02_01_00_00_00_00_00_00),
-    BitBoard(0x04_02_01_00_00_00_00_00),
-    BitBoard(0x08_04_02_01_00_00_00_00),
-    BitBoard(0x10_08_04_02_01_00_00_00),
-    BitBoard(0x20_10_08_04_02_01_00_00),
-    BitBoard(0x40_20_10_08_04_02_01_00),
-    BitBoard(0x80_40_20_10_08_04_02_01),
-    BitBoard(0x00_80_40_20_10_08_04_02),
-    BitBoard(0x00_00_80_40_20_10_08_04),
-    BitBoard(0x00_00_00_80_40_20_10_08),
-    BitBoard(0x00_00_00_00_80_40_20_10),
-    BitBoard(0x00_00_00_00_00_80_40_20),
-    BitBoard(0x00_00_00_00_00_00_80_40),
-    BitBoard(0x00_00_00_00_00_00_00_80),
-];
+const fn generate_diag_lookup() -> [BitBoard; 30] {
+    let mut diag_table = [BitBoard::new_empty(); 30];
+    let mut pos_int = 0u8;
+
+    while pos_int < 64 {
+        let pos = BoardPos::from_bitboard_offset(pos_int);
+        let fnum = pos.file.to_num() as i32;
+        let rnum = pos.rank.to_num() as i32;
+
+        let d_idx = (fnum - rnum + 22) as usize;
+        let ad_idx = (fnum + rnum) as usize;
+
+        diag_table[d_idx] = diag_table[d_idx].with_set(pos);
+        diag_table[ad_idx] = diag_table[ad_idx].with_set(pos);
+
+        pos_int += 1;
+    }
+
+    diag_table
+}
+
+const DIAG_LOOKUP: [BitBoard; 30] = generate_diag_lookup();
 
 pub const fn diagonal(pos: BoardPos) -> BitBoard {
     DIAG_LOOKUP[(pos.file.to_num() + 22 - pos.rank.to_num()) as usize]
@@ -167,28 +158,132 @@ pub const fn double_pawn_moves() -> BitBoard {
         .union_with(rank(Rank::R5))
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
 
-    // The code used to generate DIAG_LOOKUP above. Run explicitly with:
-    //     cargo test -- --include-ignored bitboard::masks::test::dummy_generate_diagonals
-    #[test]
-    #[ignore]
-    fn dummy_generate_diagonals() {
-        let mut diag_table = [BitBoard::new_empty(); 30];
+const fn line_slow(a: BoardPos, b: BoardPos) -> BitBoard {
+    if a.const_eq(&b) {
+        BitBoard::new_empty()
+    } else if a.file.to_num() == b.file.to_num() {
+        file(a.file)
+    } else if a.rank.to_num() == b.rank.to_num() {
+        rank(a.rank)
+    } else {
+        let a_diag = diagonal(a);
+        let a_antidiag = antidiagonal(a);
+        let b_diag = diagonal(b);
+        let b_antidiag = antidiagonal(b);
 
-        for pos in BoardPos::iter_all() {
-            let fnum = pos.file.to_num() as i32;
-            let rnum = pos.rank.to_num() as i32;
-            diag_table[(fnum + rnum) as usize].set(pos);
-            diag_table[(fnum - rnum + 22) as usize].set(pos);
+        if a_diag.const_eq(b_diag) {
+            a_diag
+        } else if a_antidiag.const_eq(b_antidiag) {
+            a_antidiag
+        } else {
+            BitBoard::new_empty()
         }
-
-        for bb in diag_table.iter() {
-            println!("    BitBoard({:#018x}),", bb.0)
-        }
-
-        assert!(false);
     }
+}
+
+const fn compute_line_table() -> [[BitBoard; 64]; 64] {
+    let mut table = [[BitBoard::new_empty(); 64]; 64];
+
+    let mut source = 0u8;
+    while source < 64 {
+        let mut dest = 0u8;
+        let a = BoardPos::from_bitboard_offset(source);
+        while dest < 64 {
+            let b = BoardPos::from_bitboard_offset(dest);
+
+            table[source as usize][dest as usize] = line_slow(a, b);
+
+            dest += 1;
+        }
+        source += 1;
+    }
+
+    table
+}
+
+static LINE_TABLE: [[BitBoard; 64]; 64] = compute_line_table();
+
+pub fn line(a: BoardPos, b: BoardPos) -> BitBoard {
+    let a = a.to_bitboard_offset() as usize;
+    let b = b.to_bitboard_offset() as usize;
+    LINE_TABLE[a][b]
+}
+
+/// Compute the between BitBoard on the fly
+const fn between_slow(a: BoardPos, b: BoardPos) -> BitBoard {
+    const fn int_between(a: i8, b: i8, test: i8) -> bool {
+        if a < b {
+            a < test && test < b
+        } else {
+            b < test && test < a
+        }
+    }
+
+    if a.const_eq(&b) {
+        return BitBoard::new_empty();
+    }
+
+    let mut bb = line_slow(a, b);
+
+    if a.rank.to_num() == b.rank.to_num() {
+        let a = a.file.to_num() as i8;
+        let b = b.file.to_num() as i8;
+
+        let mut f = 0u8;
+        while f < 8 {
+            if !int_between(a, b, f as i8) {
+                bb = bb.intersect_with(
+                    file(File::from_num(f)).inverse()
+                )
+            }
+            f += 1;
+        }
+    } else {
+        let a = a.rank.to_num() as i8;
+        let b = b.rank.to_num() as i8;
+
+        let mut r = 0u8;
+        while r < 8 {
+            if !int_between(a, b, r as i8) {
+                bb = bb.intersect_with(
+                    rank(Rank::from_num(r)).inverse()
+                )
+            }
+            r += 1;
+        }
+    }
+
+    bb
+}
+
+
+// Precompute between(source, dest) for all pairs of squares.
+// Written in a slightly strange way to keep it const-compatible.
+const fn compute_between_table() -> [[BitBoard; 64]; 64] {
+    let mut table = [[BitBoard::new_empty(); 64]; 64];
+
+    let mut source = 0u8;
+    while source < 64 {
+        let mut dest = 0u8;
+        let a = BoardPos::from_bitboard_offset(source);
+        while dest < 64 {
+            let b = BoardPos::from_bitboard_offset(dest);
+
+            table[source as usize][dest as usize] = between_slow(a, b);
+
+            dest += 1;
+        }
+        source += 1;
+    }
+
+    table
+}
+
+static BETWEEN_TABLE: [[BitBoard; 64]; 64] = compute_between_table();
+
+pub fn between(a: BoardPos, b: BoardPos) -> BitBoard {
+    let a = a.to_bitboard_offset() as usize;
+    let b = b.to_bitboard_offset() as usize;
+    BETWEEN_TABLE[a][b]
 }

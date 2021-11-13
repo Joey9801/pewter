@@ -40,6 +40,10 @@ impl BitBoard {
         self.0 & (1u64 << pos.to_bitboard_offset()) != 0
     }
 
+    pub const fn const_eq(&self, other: Self) -> bool {
+        self.0 == other.0
+    }
+
     pub const fn any(&self) -> bool {
         self.0 != 0
     }

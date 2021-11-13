@@ -1,3 +1,11 @@
+// Many lookup tables are precomputed in const functions at compile time to
+// improve runtime performance.
+// Could potentially move these precomputations into an "init" style function to
+// reduce build times, though this many limit the compiler's opportuities for
+// inlining
+#![feature(const_eval_limit)]
+#![const_eval_limit = "20000000"]
+
 use bitflags::bitflags;
 use variant_count::VariantCount;
 
@@ -6,10 +14,12 @@ pub mod chessmove;
 pub mod coordinates;
 pub mod movegen;
 pub mod io;
+pub mod color;
 
 use bitboard::{BitBoard, masks::*};
 use chessmove::Move;
 use coordinates::{consts::*, BoardPos, File, Rank};
+use color::Color;
 
 #[derive(Clone, Copy, Debug, VariantCount, PartialEq, Eq)]
 pub enum Piece {
@@ -53,23 +63,6 @@ impl Piece {
             Piece::Bishop => 'b',
             Piece::King => 'k',
             Piece::Queen => 'q',
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Color {
-    White,
-    Black,
-}
-
-impl std::ops::Not for Color {
-    type Output = Self;
-
-    fn not(self) -> Self::Output {
-        match self {
-            Color::White => Color::Black,
-            Color::Black => Color::White,
         }
     }
 }
@@ -396,10 +389,10 @@ impl State {
 fn main() {
     use crate::io::fen::parse_fen;
 
-    println!("{}", bitboard::masks::edges().pretty_format());
-    println!("{}", bitboard::masks::diagonal(F4).pretty_format());
-    println!("{}", bitboard::masks::antidiagonal(G7).pretty_format());
-    println!("{}", parse_fen( "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap().pretty_format());
+    println!("{}", bitboard::masks::between(B2, G2).pretty_format());
+    println!("{}", bitboard::masks::between(B2, B7).pretty_format());
+    println!("{}", bitboard::masks::between(C2, F5).pretty_format());
+    println!("{}", bitboard::masks::between(B6, G1).pretty_format());
 }
 
 #[cfg(test)]

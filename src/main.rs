@@ -1,7 +1,7 @@
 // Many lookup tables are precomputed in const functions at compile time to
 // improve runtime performance.
 // Could potentially move these precomputations into an "init" style function to
-// reduce build times, though this many limit the compiler's opportuities for
+// reduce build times, though this may limit the compiler's opportuities for
 // inlining
 #![feature(const_eval_limit)]
 #![const_eval_limit = "20000000"]
@@ -16,7 +16,7 @@ pub mod movegen;
 pub mod io;
 pub mod color;
 
-use bitboard::{BitBoard, masks::*};
+use bitboard::{BitBoard, masks};
 use chessmove::Move;
 use coordinates::{consts::*, BoardPos, File, Rank};
 use color::Color;
@@ -99,6 +99,10 @@ pub struct State {
     pub white_union_bitboard: BitBoard,
     pub black_union_bitboard: BitBoard,
     pub all_union_bitboard: BitBoard,
+
+    pub pinned: BitBoard,
+
+    pub checkers: BitBoard,
 }
 
 impl State {
@@ -114,6 +118,8 @@ impl State {
             white_union_bitboard: BitBoard::new_empty(),
             black_union_bitboard: BitBoard::new_empty(),
             all_union_bitboard: BitBoard::new_empty(),
+            pinned: BitBoard::new_empty(),
+            checkers: BitBoard::new_empty(),
         }
     }
 
@@ -134,6 +140,11 @@ impl State {
         }
 
         self.all_union_bitboard.set(pos);
+    }
+
+    pub fn king_pos(&self, color: Color) -> BoardPos {
+        self.bitboard(color, Piece::King).first_set()
+            .expect("Failed to find a king")
     }
 
     pub fn bitboard(&self, color: Color, piece: Piece) -> &BitBoard {
@@ -204,6 +215,31 @@ impl State {
         }
 
         unreachable!()
+    }
+
+    fn set_pinners_and_checkers(&mut self) {
+        self.pinned = BitBoard::new_empty();
+        self.checkers = BitBoard::new_empty();
+
+        let k_pos = self.king_pos(self.to_play);
+
+        let bishops = self.bitboard(!self.to_play, Piece::Bishop)
+            .union_with(*self.bitboard(!self.to_play, Piece::Queen));
+        let rooks = self.bitboard(!self.to_play, Piece::Rook)
+            .union_with(*self.bitboard(!self.to_play, Piece::Queen));
+
+        let pinners = (bishops & masks::bishop_rays(k_pos)) | (rooks & masks::rook_rays(k_pos));
+
+        for sq in pinners {
+            let between = masks::between(sq, k_pos) & self.all_union_bitboard;
+            if !between.any() {
+                self.checkers.set(sq);
+            } else if between.count() == 1 {
+                self.pinned = self.pinned.union_with(between);
+            }
+        }
+
+        // TODO: Include knights and pawns in chekers
     }
 
     fn apply_castling(&mut self, m: Move, ) {
@@ -350,13 +386,13 @@ impl State {
             self.clear(!self.to_play, Piece::Pawn, ep_pawn_pos);
         }
 
-        if move_bb & castling_moves_all() == move_bb {
+        if move_bb & masks::castling_moves_all() == move_bb {
             self.apply_castling(m);
         }
         self.update_castling_rights(m, piece, capture_piece);
 
         // Update the en-passant capturable state
-        if (piece == Piece::Pawn) && (move_bb & double_pawn_moves() == move_bb) {
+        if (piece == Piece::Pawn) && (move_bb & masks::double_pawn_moves() == move_bb) {
             let rank = match self.to_play {
                 Color::White => Rank::R3,
                 Color::Black => Rank::R6,

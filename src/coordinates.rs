@@ -211,6 +211,44 @@ impl BoardPos {
     pub const fn const_eq(&self, other: &BoardPos) -> bool {
         self.to_bitboard_offset() == other.to_bitboard_offset()
     }
+
+    pub fn forward(&self, color: Color) -> Option<Self> {
+        let delta = match color {
+            Color::White => 1i8,
+            Color::Black => -1i8,
+        };
+
+        match self.rank.to_num() as i8 + delta {
+            x if x >= 0 && x <= 7 => Some(Rank::from_num(x as u8)),
+            _ => None,
+        }.map(|rank| {
+            Self::from_file_rank(self.file, rank)
+        })
+    }
+
+    pub fn two_forward(&self, color: Color) -> Option<Self> {
+        self.forward(color)
+            .map(|p| p.forward(color))
+            .flatten()
+    }
+
+    pub fn left(&self) -> Option<Self> {
+        match self.file.to_num() as i8 - 1 {
+            x if x >= 0 => Some(File::from_num(x as u8)),
+            _ => None,
+        }.map(|file| {
+            Self::from_file_rank(file, self.rank)
+        })
+    }
+
+    pub fn right(&self) -> Option<Self> {
+        match self.file.to_num() + 1 {
+            x if x <= 7 => Some(File::from_num(x as u8)),
+            _ => None,
+        }.map(|file| {
+            Self::from_file_rank(file, self.rank)
+        })
+    }
 }
 
 impl From<(Rank, File)> for BoardPos {

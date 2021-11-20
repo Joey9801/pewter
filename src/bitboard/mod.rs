@@ -1,3 +1,5 @@
+use std::iter::FromIterator;
+
 use crate::BoardPos;
 
 pub mod masks;
@@ -136,4 +138,25 @@ impl From<BoardPos> for BitBoard {
     fn from(pos: BoardPos) -> Self {
         Self::single(pos)
     }
+}
+
+impl FromIterator<BoardPos> for BitBoard {
+    fn from_iter<T: IntoIterator<Item = BoardPos>>(iter: T) -> Self {
+        let mut bb = Self::new_empty();
+
+        for pos in iter {
+            bb.set(pos);
+        }
+
+        bb
+    }
+}
+
+impl Iterator for BitBoard {
+    type Item = BoardPos;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.first_set()
+    }
+    
 }

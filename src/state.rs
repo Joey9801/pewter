@@ -1,10 +1,8 @@
 use bitflags::bitflags;
-use crate::board::Board;
-use crate::piece::Piece;
-use crate::bitboard::{masks, BitBoard};
-use crate::chessmove::Move;
-use crate::color::Color;
-use crate::coordinates::{consts::*, BoardPos, File, Rank};
+
+use crate::bitboard::masks;
+use crate::coordinates::consts::*;
+use crate::{BitBoard, Board, BoardPos, Color, File, Move, Piece, Rank};
 
 bitflags! {
     pub struct CastleRights: u8 {
@@ -56,16 +54,19 @@ impl State {
     }
 
     pub fn king_pos(&self, color: Color) -> BoardPos {
-        self.board.king_pos(color)
+        self.board
+            .king_pos(color)
             .expect("Expect valid game states to always have a king for each color")
     }
-    
+
     fn set(&mut self, color: Color, piece: Piece, pos: BoardPos) {
-        self.board.union_inplace(color, piece, BitBoard::single(pos));
+        self.board
+            .union_inplace(color, piece, BitBoard::single(pos));
     }
 
     fn clear(&mut self, color: Color, piece: Piece, pos: BoardPos) {
-        self.board.intersect_inplace(color, piece, BitBoard::single(pos));
+        self.board
+            .intersect_inplace(color, piece, BitBoard::single(pos));
     }
 
     fn get(&self, pos: BoardPos) -> Option<(Color, Piece)> {
@@ -80,13 +81,15 @@ impl State {
         let color = self.board.color_board(!self.to_play);
         let queens = self.board.piece_board(Piece::Queen);
 
-        let pinner_bishops = self.board
+        let pinner_bishops = self
+            .board
             .piece_board(Piece::Bishop)
             .union_with(queens)
             .intersect_with(color)
             .intersect_with(masks::bishop_rays(k_pos));
 
-        let pinner_rooks = self.board
+        let pinner_rooks = self
+            .board
             .piece_board(Piece::Rook)
             .union_with(queens)
             .intersect_with(color)
@@ -137,9 +140,8 @@ impl State {
             (Color::Black, true) => F8,
             (Color::Black, false) => D8,
         };
-        
-        let op = BitBoard::single(from)
-            .union_with(BitBoard::single(to));
+
+        let op = BitBoard::single(from).union_with(BitBoard::single(to));
         self.board.xor_inplace(self.to_play, Piece::Rook, op);
     }
 
@@ -230,8 +232,7 @@ impl State {
             p
         });
 
-        let op = BitBoard::single(m.from)
-            .union_with(BitBoard::single(m.to));
+        let op = BitBoard::single(m.from).union_with(BitBoard::single(m.to));
         self.board.xor_inplace(self.to_play, piece, op);
 
         // Handle all regular captures, where the destination square was
@@ -280,7 +281,7 @@ impl State {
         } else {
             self.halfmove_clock += 1;
         }
-        
+
         self.set_pinners_and_checkers();
 
         if self.to_play == Color::Black {
@@ -290,16 +291,15 @@ impl State {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
 
-    use crate::piece::Piece;
-    use crate::color::Color;
     use crate::chessmove::Move;
+    use crate::color::Color;
     use crate::coordinates::proptest_helpers::*;
     use crate::io::fen::{format_fen, parse_fen};
+    use crate::piece::Piece;
 
     use proptest::strategy::{Just, Strategy};
     use proptest::{prop_oneof, proptest};

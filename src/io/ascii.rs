@@ -1,4 +1,4 @@
-use crate::coordinates::BoardPos;
+use crate::BoardPos;
 
 pub fn pretty_format(sym: impl Fn(BoardPos) -> char) -> String {
     use crate::coordinates::File::*;

@@ -1,8 +1,7 @@
-use std::iter::FromIterator;
-
-use crate::coordinates::BoardPos;
-
 pub mod masks;
+
+use crate::BoardPos;
+use std::iter::FromIterator;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BitBoard(pub u64);
@@ -19,7 +18,7 @@ impl BitBoard {
     pub const fn single(pos: BoardPos) -> Self {
         Self(1 << pos.to_bitboard_offset())
     }
-    
+
     pub fn xor_inplace(&mut self, arg: BitBoard) {
         self.0 ^= arg.0
     }
@@ -69,7 +68,7 @@ impl BitBoard {
     pub const fn intersect_with(&self, other: Self) -> Self {
         Self(self.0 & other.0)
     }
-    
+
     pub fn union_inplace(&mut self, other: Self) {
         *self = self.union_with(other);
     }
@@ -96,7 +95,7 @@ impl BitBoard {
             .filter(move |i| (1 << i) & self.0 != 0)
             .map(BoardPos::from_bitboard_offset)
     }
-    
+
     pub fn iter_set(self) -> impl Iterator<Item = BoardPos> {
         BitBoardIter(self)
     }

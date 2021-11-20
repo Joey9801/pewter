@@ -1,8 +1,8 @@
 use arrayvec::ArrayVec;
 
-use crate::bitboard::BitBoard;
-use crate::coordinates::BoardPos;
-use crate::piece::Piece;
+use crate::BitBoard;
+use crate::BoardPos;
+use crate::Piece;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Move {
@@ -142,7 +142,6 @@ impl ExactSizeIterator for MoveSetChunkIter {}
 pub struct MoveSet {
     chunks: ArrayVec<MoveSetChunk, 16>,
 }
-
 
 impl MoveSet {
     // TODO: This iterator isn't an ExactSizeIterator, but notionally could be

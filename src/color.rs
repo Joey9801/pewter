@@ -13,7 +13,7 @@ impl Color {
             Color::Black => 1,
         }
     }
-    
+
     pub const fn from_num(num: u8) -> Self {
         match num {
             0 => Self::White,

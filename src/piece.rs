@@ -44,8 +44,8 @@ impl Piece {
             Piece::Queen => 'q',
         }
     }
-    
-    pub fn iter_all() -> impl Iterator<Item=Self> {
+
+    pub fn iter_all() -> impl Iterator<Item = Self> {
         [
             Piece::Pawn,
             Piece::Rook,
@@ -53,6 +53,8 @@ impl Piece {
             Piece::Bishop,
             Piece::King,
             Piece::Queen,
-        ].iter().cloned()
+        ]
+        .iter()
+        .cloned()
     }
 }

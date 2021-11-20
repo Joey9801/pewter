@@ -1,7 +1,5 @@
-use crate::{
-    color::Color,
-    coordinates::{consts::*, BoardPos, File, Rank},
-};
+use crate::coordinates::consts::*;
+use crate::{BoardPos, Color, File, Rank};
 
 use super::BitBoard;
 

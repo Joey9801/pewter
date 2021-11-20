@@ -1,8 +1,10 @@
+#[allow(unused)]
 fn pext_native(val: u64, mask: u64) -> u64 {
     pext_polyfill(val, mask)
 }
 
 // Slower manual implementation of the PEXT behaviour for CPUs which don't support the instruction natively
+#[allow(unused)]
 fn pext_polyfill(val: u64, mut mask: u64) -> u64 {
     let mut res = 0;
     let mut bb = 1;

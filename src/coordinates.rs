@@ -1,4 +1,4 @@
-use crate::color::Color;
+use crate::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rank {
@@ -134,7 +134,7 @@ impl BoardPos {
             file: File::from_num(offset % 8),
         }
     }
-    
+
     pub const fn from_file_rank(file: File, rank: Rank) -> Self {
         Self { rank, file }
     }

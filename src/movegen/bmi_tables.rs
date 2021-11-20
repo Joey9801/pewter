@@ -1,5 +1,5 @@
 fn pext_native(val: u64, mask: u64) -> u64 {
-    todo!()
+    pext_polyfill(val, mask)
 }
 
 // Slower manual implementation of the PEXT behaviour for CPUs which don't support the instruction natively

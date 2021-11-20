@@ -19,6 +19,10 @@ impl BitBoard {
     pub const fn single(pos: BoardPos) -> Self {
         Self(1 << pos.to_bitboard_offset())
     }
+    
+    pub fn xor_inplace(&mut self, arg: BitBoard) {
+        self.0 ^= arg.0
+    }
 
     pub const fn with_set(mut self, pos: BoardPos) -> Self {
         self.0 |= 1u64 << pos.to_bitboard_offset();
@@ -65,6 +69,14 @@ impl BitBoard {
     pub const fn intersect_with(&self, other: Self) -> Self {
         Self(self.0 & other.0)
     }
+    
+    pub fn union_inplace(&mut self, other: Self) {
+        *self = self.union_with(other);
+    }
+
+    pub fn intersect_inplace(&mut self, other: Self) {
+        *self = self.intersect_with(other);
+    }
 
     pub const fn inverse(&self) -> Self {
         Self(!self.0)
@@ -83,6 +95,10 @@ impl BitBoard {
         (0..64)
             .filter(move |i| (1 << i) & self.0 != 0)
             .map(BoardPos::from_bitboard_offset)
+    }
+    
+    pub fn iter_set(self) -> impl Iterator<Item = BoardPos> {
+        BitBoardIter(self)
     }
 
     pub fn pretty_format(&self) -> String {
@@ -152,10 +168,16 @@ impl FromIterator<BoardPos> for BitBoard {
     }
 }
 
-impl Iterator for BitBoard {
+struct BitBoardIter(BitBoard);
+
+impl Iterator for BitBoardIter {
     type Item = BoardPos;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.first_set()
+        let pos = self.0.first_set();
+        if let Some(pos) = pos {
+            self.0.clear(pos);
+        }
+        pos
     }
 }

@@ -7,7 +7,8 @@
 #![const_eval_limit = "20000000"]
 
 use bitflags::bitflags;
-use variant_count::VariantCount;
+use board::Board;
+use piece::Piece;
 
 pub mod bitboard;
 pub mod chessmove;
@@ -15,57 +16,13 @@ pub mod color;
 pub mod coordinates;
 pub mod io;
 pub mod movegen;
+pub mod board;
+pub mod piece;
 
 use bitboard::{masks, BitBoard};
 use chessmove::Move;
 use color::Color;
 use coordinates::{consts::*, BoardPos, File, Rank};
-
-#[derive(Clone, Copy, Debug, VariantCount, PartialEq, Eq)]
-pub enum Piece {
-    Pawn,
-    Rook,
-    Knight,
-    Bishop,
-    King,
-    Queen,
-}
-
-impl Piece {
-    pub const fn to_num(&self) -> u8 {
-        match self {
-            Piece::Pawn => 0,
-            Piece::Rook => 1,
-            Piece::Knight => 2,
-            Piece::Bishop => 3,
-            Piece::King => 4,
-            Piece::Queen => 5,
-        }
-    }
-
-    pub const fn from_num(num: u8) -> Self {
-        match num {
-            0 => Piece::Pawn,
-            1 => Piece::Rook,
-            2 => Piece::Knight,
-            3 => Piece::Bishop,
-            4 => Piece::King,
-            5 => Piece::Queen,
-            _ => panic!("Invalid piece num"),
-        }
-    }
-
-    pub const fn to_char(&self) -> char {
-        match self {
-            Piece::Pawn => 'p',
-            Piece::Rook => 'r',
-            Piece::Knight => 'n',
-            Piece::Bishop => 'b',
-            Piece::King => 'k',
-            Piece::Queen => 'q',
-        }
-    }
-}
 
 bitflags! {
     pub struct CastleRights: u8 {
@@ -93,15 +50,8 @@ pub struct State {
     // Number of full moves since game start. Incremented after each black move.
     pub fullmove_counter: u16,
 
-    pub white_bitboards: [BitBoard; Piece::VARIANT_COUNT],
-    pub black_bitboards: [BitBoard; Piece::VARIANT_COUNT],
-
-    pub white_union_bitboard: BitBoard,
-    pub black_union_bitboard: BitBoard,
-    pub all_union_bitboard: BitBoard,
-
+    pub board: Board,
     pub pinned: BitBoard,
-
     pub checkers: BitBoard,
 }
 
@@ -113,109 +63,31 @@ impl State {
             en_passant: None,
             halfmove_clock: 0,
             fullmove_counter: 0,
-            white_bitboards: [BitBoard::new_empty(); Piece::VARIANT_COUNT],
-            black_bitboards: [BitBoard::new_empty(); Piece::VARIANT_COUNT],
-            white_union_bitboard: BitBoard::new_empty(),
-            black_union_bitboard: BitBoard::new_empty(),
-            all_union_bitboard: BitBoard::new_empty(),
+            board: Board::new_empty(),
             pinned: BitBoard::new_empty(),
             checkers: BitBoard::new_empty(),
         }
     }
 
     pub fn add_piece(&mut self, color: Color, piece: Piece, pos: BoardPos) {
-        if self.all_union_bitboard.get(pos) {
-            panic!("Attempting to add a piece on top of another");
-        }
-
-        match color {
-            Color::White => {
-                self.white_union_bitboard.set(pos);
-                self.white_bitboards[piece.to_num() as usize].set(pos);
-            }
-            Color::Black => {
-                self.black_union_bitboard.set(pos);
-                self.black_bitboards[piece.to_num() as usize].set(pos);
-            }
-        }
-
-        self.all_union_bitboard.set(pos);
+        self.board.add_piece(pos, color, piece);
     }
 
     pub fn king_pos(&self, color: Color) -> BoardPos {
-        self.bitboard(color, Piece::King)
-            .first_set()
-            .expect("Failed to find a king")
+        self.board.king_pos(color)
+            .expect("Expect valid game states to always have a king for each color")
     }
-
-    pub fn bitboard(&self, color: Color, piece: Piece) -> &BitBoard {
-        match color {
-            Color::White => &self.white_bitboards[piece.to_num() as usize],
-            Color::Black => &self.black_bitboards[piece.to_num() as usize],
-        }
-    }
-
-    fn bitboard_mut(&mut self, color: Color, piece: Piece) -> &mut BitBoard {
-        match color {
-            Color::White => &mut self.white_bitboards[piece.to_num() as usize],
-            Color::Black => &mut self.black_bitboards[piece.to_num() as usize],
-        }
-    }
-
-    pub fn color_union_bitboard(&self, color: Color) -> &BitBoard {
-        match color {
-            Color::White => &self.white_union_bitboard,
-            Color::Black => &self.black_union_bitboard,
-        }
-    }
-
-    fn color_union_bitboard_mut(&mut self, color: Color) -> &mut BitBoard {
-        match color {
-            Color::White => &mut self.white_union_bitboard,
-            Color::Black => &mut self.black_union_bitboard,
-        }
-    }
-
+    
     fn set(&mut self, color: Color, piece: Piece, pos: BoardPos) {
-        let bb = self.bitboard_mut(color, piece);
-        debug_assert!(!bb[pos]);
-        bb.set(pos);
-
-        let cu_bb = self.color_union_bitboard_mut(color);
-        debug_assert!(!cu_bb[pos]);
-        cu_bb.set(pos);
-
-        self.all_union_bitboard.set(pos);
+        self.board.union_inplace(color, piece, BitBoard::single(pos));
     }
 
     fn clear(&mut self, color: Color, piece: Piece, pos: BoardPos) {
-        let bb = self.bitboard_mut(color, piece);
-        debug_assert!(bb[pos]);
-        bb.clear(pos);
-
-        let cu_bb = self.color_union_bitboard_mut(color);
-        debug_assert!(cu_bb[pos]);
-        cu_bb.clear(pos);
-
-        self.all_union_bitboard.clear(pos);
+        self.board.intersect_inplace(color, piece, BitBoard::single(pos));
     }
 
     fn get(&self, pos: BoardPos) -> Option<(Color, Piece)> {
-        let color = if self.white_union_bitboard[pos] {
-            Color::White
-        } else if self.black_union_bitboard[pos] {
-            Color::Black
-        } else {
-            return None;
-        };
-
-        for piece in (0..Piece::VARIANT_COUNT as u8).map(|x| Piece::from_num(x)) {
-            if self.bitboard(color, piece)[pos] {
-                return Some((color, piece));
-            }
-        }
-
-        unreachable!()
+        self.board.get(pos)
     }
 
     fn set_pinners_and_checkers(&mut self) {
@@ -223,22 +95,30 @@ impl State {
         self.checkers = BitBoard::new_empty();
 
         let k_pos = self.king_pos(self.to_play);
+        let color = self.board.color_board(!self.to_play);
+        let queens = self.board.piece_board(Piece::Queen);
 
-        let bishops = self
-            .bitboard(!self.to_play, Piece::Bishop)
-            .union_with(*self.bitboard(!self.to_play, Piece::Queen));
-        let rooks = self
-            .bitboard(!self.to_play, Piece::Rook)
-            .union_with(*self.bitboard(!self.to_play, Piece::Queen));
+        let pinner_bishops = self.board
+            .piece_board(Piece::Bishop)
+            .union_with(queens)
+            .intersect_with(color)
+            .intersect_with(masks::bishop_rays(k_pos));
 
-        let pinners = (bishops & masks::bishop_rays(k_pos)) | (rooks & masks::rook_rays(k_pos));
+        let pinner_rooks = self.board
+            .piece_board(Piece::Rook)
+            .union_with(queens)
+            .intersect_with(color)
+            .intersect_with(masks::rook_rays(k_pos));
 
-        for sq in pinners {
-            let between = masks::between(sq, k_pos) & self.all_union_bitboard;
-            if !between.any() {
-                self.checkers.set(sq);
-            } else if between.count() == 1 {
-                self.pinned = self.pinned.union_with(between);
+        let all_pinners = pinner_bishops.union_with(pinner_rooks);
+
+        let union_board = self.board.all_union_board();
+        for pos in all_pinners.iter_set() {
+            let between = masks::between(pos, k_pos) & union_board;
+            match between.count() {
+                0 => self.checkers.set(pos),
+                1 => self.pinned = self.pinned.union_with(between),
+                _ => (),
             }
         }
 
@@ -248,7 +128,7 @@ impl State {
     fn apply_castling(&mut self, m: Move) {
         let kingside = m.to.file == File::G;
 
-        let req_flag = if self.to_play == Color::Black {
+        let required_flag = if self.to_play == Color::Black {
             if kingside {
                 CastleRights::BLACK_KINGSIDE
             } else {
@@ -261,7 +141,7 @@ impl State {
                 CastleRights::WHITE_QUEENSIDE
             }
         };
-        debug_assert!(self.castle_rights.contains(req_flag));
+        debug_assert!(self.castle_rights.contains(required_flag));
 
         let from = match (self.to_play, kingside) {
             (Color::White, true) => H1,
@@ -275,8 +155,10 @@ impl State {
             (Color::Black, true) => F8,
             (Color::Black, false) => D8,
         };
-        self.clear(self.to_play, Piece::Rook, from);
-        self.set(self.to_play, Piece::Rook, to);
+        
+        let op = BitBoard::single(from)
+            .union_with(BitBoard::single(to));
+        self.board.xor_inplace(self.to_play, Piece::Rook, op);
     }
 
     fn update_castling_rights(&mut self, m: Move, piece: Piece, capture_piece: Option<Piece>) {
@@ -366,8 +248,9 @@ impl State {
             p
         });
 
-        self.clear(self.to_play, piece, m.from);
-        self.set(self.to_play, piece, m.to);
+        let op = BitBoard::single(m.from)
+            .union_with(BitBoard::single(m.to));
+        self.board.xor_inplace(self.to_play, piece, op);
 
         // Handle all regular captures, where the destination square was
         // previously occupied by the piece being captured
@@ -472,16 +355,16 @@ mod test {
         ) {
             let mut state = State::new_empty();
 
-            assert!(!state.color_union_bitboard(color).any());
+            assert!(!state.board.color_board(color).any());
             state.add_piece(color, piece, pos);
 
-            let bb = state.bitboard(color, piece);
-            assert_eq!(bb, state.color_union_bitboard(color));
-            assert_eq!(bb, &state.all_union_bitboard);
+            let bb = state.board.color_piece_board(color, piece);
+            assert_eq!(bb, state.board.color_board(color));
+            assert_eq!(bb, state.board.all_union_board());
             assert_eq!(bb.count(), 1);
             assert!(bb.get(pos));
 
-            let other_bb = state.bitboard(!color, piece);
+            let other_bb = state.board.color_piece_board(!color, piece);
             assert!(!other_bb.any());
         }
     }

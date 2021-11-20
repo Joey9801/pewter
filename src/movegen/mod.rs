@@ -15,12 +15,12 @@ pub fn all_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
 }
 
 fn pawn_psuedo_legal(state: &State, moves: &mut Vec<Move>) {
-    for from in state.bitboard(state.to_play, Piece::Pawn).iter_all() {
+    for from in state.board.color_piece_board(state.to_play, Piece::Pawn).iter_all() {
         if let Some(one_up_rank) = from.rank.next_up(state.to_play) {
             let one_up_to = BoardPos::from_file_rank(from.file, one_up_rank);
 
             // Single pawn pushes
-            if !state.all_union_bitboard[one_up_to] {
+            if !state.board.all_union_board()[one_up_to] {
                 moves.push(Move {
                     from,
                     to: one_up_to,
@@ -32,7 +32,7 @@ fn pawn_psuedo_legal(state: &State, moves: &mut Vec<Move>) {
                     if from.rank == Rank::R2 || from.rank == Rank::R7 {
                         let two_up_to = BoardPos::from_file_rank(from.file, two_up_rank);
 
-                        if !state.all_union_bitboard[two_up_to] {
+                        if !state.board.all_union_board()[two_up_to] {
                             moves.push(Move {
                                 from,
                                 to: two_up_to,
@@ -58,7 +58,7 @@ const KNIGHT_MOVE_OFFSETS: &[(i8, i8)] = &[
 ];
 
 fn knight_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
-    for from in state.bitboard(state.to_play, Piece::Knight).iter_all() {
+    for from in state.board.color_piece_board(state.to_play, Piece::Knight).iter_all() {
         let from_nums = (from.file.to_num() as i8, from.rank.to_num() as i8);
 
         for to_nums in KNIGHT_MOVE_OFFSETS
@@ -89,7 +89,7 @@ fn knight_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
 const BISHOP_DIRS: &[(i8, i8)] = &[(-1, -1), (-1, 1), (1, -1), (1, 1)];
 
 fn bishop_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
-    for from in state.bitboard(state.to_play, Piece::Bishop).iter_all() {
+    for from in state.board.color_piece_board(state.to_play, Piece::Bishop).iter_all() {
         let from_nums = (from.file.to_num() as i8, from.rank.to_num() as i8);
 
         for dir in BISHOP_DIRS {
@@ -128,7 +128,7 @@ fn bishop_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
 const ROOK_DIRS: &[(i8, i8)] = &[(1, 0), (-1, 0), (0, 1), (0, -1)];
 
 fn rook_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
-    for from in state.bitboard(state.to_play, Piece::Rook).iter_all() {
+    for from in state.board.color_piece_board(state.to_play, Piece::Rook).iter_all() {
         let from_nums = (from.file.to_num() as i8, from.rank.to_num() as i8);
 
         for dir in ROOK_DIRS {

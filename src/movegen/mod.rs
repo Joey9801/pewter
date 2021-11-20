@@ -1,4 +1,9 @@
-use crate::{Piece, State, bitboard::BitBoard, chessmove::Move, coordinates::{BoardPos, File, Rank}};
+use crate::{
+    bitboard::BitBoard,
+    chessmove::Move,
+    coordinates::{BoardPos, File, Rank},
+    Piece, State,
+};
 
 mod bmi_tables;
 
@@ -22,7 +27,6 @@ fn pawn_psuedo_legal(state: &State, moves: &mut Vec<Move>) {
                     promotion: None,
                 });
 
-
                 // Double pawn push
                 if let Some(two_up_rank) = one_up_rank.next_up(state.to_play) {
                     if from.rank == Rank::R2 || from.rank == Rank::R7 {
@@ -42,14 +46,13 @@ fn pawn_psuedo_legal(state: &State, moves: &mut Vec<Move>) {
     }
 }
 
-
 const KNIGHT_MOVE_OFFSETS: &[(i8, i8)] = &[
     (2, -1),
-    (2,  1),
+    (2, 1),
     (1, -2),
-    (1,  2),
+    (1, 2),
     (-1, -2),
-    (-1,  2),
+    (-1, 2),
     (-2, -1),
     (-2, 1),
 ];
@@ -62,8 +65,8 @@ fn knight_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
             .iter()
             .map(|km_off| (from_nums.0 + km_off.0, from_nums.1 + km_off.1))
             .filter(|(x, _)| *x >= 0 && *x <= 7)
-            .filter(|(_, x)| *x >= 0 && *x <= 7) {
-
+            .filter(|(_, x)| *x >= 0 && *x <= 7)
+        {
             let to = BoardPos::from_file_rank(
                 File::from_num(to_nums.0 as u8),
                 Rank::from_num(to_nums.1 as u8),
@@ -73,7 +76,8 @@ fn knight_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
                 Some((c, _)) if c == state.to_play => continue,
                 _ => {
                     moves.push(Move {
-                        from, to,
+                        from,
+                        to,
                         promotion: None,
                     });
                 }
@@ -82,12 +86,7 @@ fn knight_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
     }
 }
 
-const BISHOP_DIRS: &[(i8, i8)] = &[
-    (-1, -1),
-    (-1, 1),
-    (1, -1),
-    (1, 1),
-];
+const BISHOP_DIRS: &[(i8, i8)] = &[(-1, -1), (-1, 1), (1, -1), (1, 1)];
 
 fn bishop_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
     for from in state.bitboard(state.to_play, Piece::Bishop).iter_all() {
@@ -115,7 +114,8 @@ fn bishop_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
                     Some((c, _)) if c == state.to_play => break,
                     _ => {
                         moves.push(Move {
-                            from, to,
+                            from,
+                            to,
                             promotion: None,
                         });
                     }
@@ -125,12 +125,7 @@ fn bishop_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
     }
 }
 
-const ROOK_DIRS: &[(i8, i8)] = &[
-    (1, 0),
-    (-1, 0),
-    (0, 1),
-    (0, -1),
-];
+const ROOK_DIRS: &[(i8, i8)] = &[(1, 0), (-1, 0), (0, 1), (0, -1)];
 
 fn rook_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
     for from in state.bitboard(state.to_play, Piece::Rook).iter_all() {
@@ -158,7 +153,8 @@ fn rook_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
                     Some((c, _)) if c == state.to_play => break,
                     _ => {
                         moves.push(Move {
-                            from, to,
+                            from,
+                            to,
                             promotion: None,
                         });
                     }

@@ -1,4 +1,7 @@
-use crate::{color::Color, coordinates::{BoardPos, File, Rank, consts::*}};
+use crate::{
+    color::Color,
+    coordinates::{consts::*, BoardPos, File, Rank},
+};
 
 use super::BitBoard;
 
@@ -62,7 +65,6 @@ pub const fn color_squares(color: Color) -> BitBoard {
         Color::Black => LIGHT_SQUARES.inverse(),
     }
 }
-
 
 // Diagonals go in two directions
 //    Where the file number - the rank number is constant (diagonals)
@@ -158,7 +160,6 @@ pub const fn double_pawn_moves() -> BitBoard {
         .union_with(rank(Rank::R5))
 }
 
-
 const fn line_slow(a: BoardPos, b: BoardPos) -> BitBoard {
     if a.const_eq(&b) {
         BitBoard::new_empty()
@@ -233,9 +234,7 @@ const fn between_slow(a: BoardPos, b: BoardPos) -> BitBoard {
         let mut f = 0u8;
         while f < 8 {
             if !int_between(a, b, f as i8) {
-                bb = bb.intersect_with(
-                    file(File::from_num(f)).inverse()
-                )
+                bb = bb.intersect_with(file(File::from_num(f)).inverse())
             }
             f += 1;
         }
@@ -246,9 +245,7 @@ const fn between_slow(a: BoardPos, b: BoardPos) -> BitBoard {
         let mut r = 0u8;
         while r < 8 {
             if !int_between(a, b, r as i8) {
-                bb = bb.intersect_with(
-                    rank(Rank::from_num(r)).inverse()
-                )
+                bb = bb.intersect_with(rank(Rank::from_num(r)).inverse())
             }
             r += 1;
         }
@@ -256,7 +253,6 @@ const fn between_slow(a: BoardPos, b: BoardPos) -> BitBoard {
 
     bb
 }
-
 
 // Precompute between(source, dest) for all pairs of squares.
 // Written in a slightly strange way to keep it const-compatible.

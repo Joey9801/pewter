@@ -11,15 +11,15 @@ use variant_count::VariantCount;
 
 pub mod bitboard;
 pub mod chessmove;
-pub mod coordinates;
-pub mod movegen;
-pub mod io;
 pub mod color;
+pub mod coordinates;
+pub mod io;
+pub mod movegen;
 
-use bitboard::{BitBoard, masks};
+use bitboard::{masks, BitBoard};
 use chessmove::Move;
-use coordinates::{consts::*, BoardPos, File, Rank};
 use color::Color;
+use coordinates::{consts::*, BoardPos, File, Rank};
 
 #[derive(Clone, Copy, Debug, VariantCount, PartialEq, Eq)]
 pub enum Piece {
@@ -143,7 +143,8 @@ impl State {
     }
 
     pub fn king_pos(&self, color: Color) -> BoardPos {
-        self.bitboard(color, Piece::King).first_set()
+        self.bitboard(color, Piece::King)
+            .first_set()
             .expect("Failed to find a king")
     }
 
@@ -223,9 +224,11 @@ impl State {
 
         let k_pos = self.king_pos(self.to_play);
 
-        let bishops = self.bitboard(!self.to_play, Piece::Bishop)
+        let bishops = self
+            .bitboard(!self.to_play, Piece::Bishop)
             .union_with(*self.bitboard(!self.to_play, Piece::Queen));
-        let rooks = self.bitboard(!self.to_play, Piece::Rook)
+        let rooks = self
+            .bitboard(!self.to_play, Piece::Rook)
             .union_with(*self.bitboard(!self.to_play, Piece::Queen));
 
         let pinners = (bishops & masks::bishop_rays(k_pos)) | (rooks & masks::rook_rays(k_pos));
@@ -242,7 +245,7 @@ impl State {
         // TODO: Include knights and pawns in chekers
     }
 
-    fn apply_castling(&mut self, m: Move, ) {
+    fn apply_castling(&mut self, m: Move) {
         let kingside = m.to.file == File::G;
 
         let req_flag = if self.to_play == Color::Black {
@@ -355,15 +358,13 @@ impl State {
         let to_bb = BitBoard::single(m.to);
         let move_bb = from_bb | to_bb;
 
-        let (_color, piece) = self.get(m.from)
-            .expect("No piece on square being moved");
+        let (_color, piece) = self.get(m.from).expect("No piece on square being moved");
         debug_assert!(_color == self.to_play);
 
-        let capture_piece = self.get(m.to)
-            .map(|(c, p)| {
-                debug_assert!(c == !self.to_play);
-                p
-            });
+        let capture_piece = self.get(m.to).map(|(c, p)| {
+            debug_assert!(c == !self.to_play);
+            p
+        });
 
         self.clear(self.to_play, piece, m.from);
         self.set(self.to_play, piece, m.to);

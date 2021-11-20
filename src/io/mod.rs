@@ -1,2 +1,2 @@
-pub mod fen;
 pub mod ascii;
+pub mod fen;

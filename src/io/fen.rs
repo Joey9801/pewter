@@ -1,4 +1,4 @@
-use crate::{BoardPos, CastleRights, File, Piece, Rank, State, color::Color};
+use crate::{color::Color, BoardPos, CastleRights, File, Piece, Rank, State};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FenParseError {

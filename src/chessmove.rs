@@ -20,9 +20,7 @@ pub enum ParseLongAlgebraicError {
 }
 
 impl Move {
-    pub fn from_long_algebraic(
-        algebraic_str: &str,
-    ) -> Result<Self, ParseLongAlgebraicError> {
+    pub fn from_long_algebraic(algebraic_str: &str) -> Result<Self, ParseLongAlgebraicError> {
         if algebraic_str.len() < 4 {
             return Err(ParseLongAlgebraicError::MissingChars);
         }
@@ -84,7 +82,7 @@ impl MoveSetChunk {
     pub fn iter(self) -> MoveSetChunkIter {
         MoveSetChunkIter {
             inner: self,
-            promotion_idx: 0
+            promotion_idx: 0,
         }
     }
 }
@@ -102,7 +100,7 @@ impl Iterator for MoveSetChunkIter {
             let mut m = Move {
                 from: self.inner.source,
                 to: dest,
-                promotion: None
+                promotion: None,
             };
 
             if self.inner.promotion {
@@ -138,7 +136,7 @@ impl Iterator for MoveSetChunkIter {
     }
 }
 
-impl ExactSizeIterator for MoveSetChunkIter { }
+impl ExactSizeIterator for MoveSetChunkIter {}
 
 #[derive(Clone, Debug)]
 pub struct MoveSet {
@@ -146,10 +144,7 @@ pub struct MoveSet {
 }
 
 impl MoveSet {
-    pub fn iter(&self) -> impl Iterator<Item=Move> + '_ {
-        self.chunks
-            .iter()
-            .map(|c| c.iter())
-            .flatten()
+    pub fn iter(&self) -> impl Iterator<Item = Move> + '_ {
+        self.chunks.iter().map(|c| c.iter()).flatten()
     }
 }

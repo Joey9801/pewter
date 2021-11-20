@@ -158,5 +158,4 @@ impl Iterator for BitBoard {
     fn next(&mut self) -> Option<Self::Item> {
         self.first_set()
     }
-    
 }

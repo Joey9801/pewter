@@ -1,8 +1,8 @@
 use crate::coordinates::BoardPos;
 
 pub fn pretty_format(sym: impl Fn(BoardPos) -> char) -> String {
-    use crate::Rank::*;
     use crate::File::*;
+    use crate::Rank::*;
 
     let mut output = String::new();
     output.push_str(" +---+---+---+---+---+---+---+---+\n");
@@ -13,7 +13,10 @@ pub fn pretty_format(sym: impl Fn(BoardPos) -> char) -> String {
             if first_col {
                 output.push_str(" |");
             }
-            output.push_str(&format!(" {} |", sym(BoardPos::from_file_rank(*file, *rank))));
+            output.push_str(&format!(
+                " {} |",
+                sym(BoardPos::from_file_rank(*file, *rank))
+            ));
             first_col = false;
         }
         output.push_str(&format!(" {}\n", rank.to_num() + 1));

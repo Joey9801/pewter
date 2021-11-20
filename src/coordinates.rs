@@ -51,7 +51,7 @@ impl Rank {
                 Rank::R6 => Some(Rank::R7),
                 Rank::R7 => Some(Rank::R8),
                 Rank::R8 => None,
-            }
+            },
             Color::Black => match self {
                 Rank::R1 => None,
                 Rank::R2 => Some(Rank::R1),
@@ -61,7 +61,7 @@ impl Rank {
                 Rank::R6 => Some(Rank::R5),
                 Rank::R7 => Some(Rank::R6),
                 Rank::R8 => Some(Rank::R7),
-            }
+            },
         }
     }
 
@@ -201,11 +201,12 @@ impl BoardPos {
     }
 
     #[cfg(test)]
-    pub fn iter_all() -> impl Iterator<Item=Self> {
-        File::all().iter()
-            .flat_map(|f|
-                Rank::all().iter().map(move |r| Self::from_file_rank(*f, *r))
-            )
+    pub fn iter_all() -> impl Iterator<Item = Self> {
+        File::all().iter().flat_map(|f| {
+            Rank::all()
+                .iter()
+                .map(move |r| Self::from_file_rank(*f, *r))
+        })
     }
 
     pub const fn const_eq(&self, other: &BoardPos) -> bool {
@@ -221,33 +222,28 @@ impl BoardPos {
         match self.rank.to_num() as i8 + delta {
             x if x >= 0 && x <= 7 => Some(Rank::from_num(x as u8)),
             _ => None,
-        }.map(|rank| {
-            Self::from_file_rank(self.file, rank)
-        })
+        }
+        .map(|rank| Self::from_file_rank(self.file, rank))
     }
 
     pub fn two_forward(&self, color: Color) -> Option<Self> {
-        self.forward(color)
-            .map(|p| p.forward(color))
-            .flatten()
+        self.forward(color).map(|p| p.forward(color)).flatten()
     }
 
     pub fn left(&self) -> Option<Self> {
         match self.file.to_num() as i8 - 1 {
             x if x >= 0 => Some(File::from_num(x as u8)),
             _ => None,
-        }.map(|file| {
-            Self::from_file_rank(file, self.rank)
-        })
+        }
+        .map(|file| Self::from_file_rank(file, self.rank))
     }
 
     pub fn right(&self) -> Option<Self> {
         match self.file.to_num() + 1 {
             x if x <= 7 => Some(File::from_num(x as u8)),
             _ => None,
-        }.map(|file| {
-            Self::from_file_rank(file, self.rank)
-        })
+        }
+        .map(|file| Self::from_file_rank(file, self.rank))
     }
 }
 

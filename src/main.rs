@@ -298,6 +298,8 @@ impl State {
         } else {
             self.halfmove_clock += 1;
         }
+        
+        self.set_pinners_and_checkers();
 
         if self.to_play == Color::Black {
             self.fullmove_counter += 1;
@@ -307,8 +309,6 @@ impl State {
 }
 
 fn main() {
-    use crate::io::fen::parse_fen;
-
     println!("{}", bitboard::masks::between(B2, G2).pretty_format());
     println!("{}", bitboard::masks::between(B2, B7).pretty_format());
     println!("{}", bitboard::masks::between(C2, F5).pretty_format());

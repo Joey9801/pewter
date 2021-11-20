@@ -1,4 +1,4 @@
-use crate::{bitboard::BitBoard, color::Color};
+use crate::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rank {

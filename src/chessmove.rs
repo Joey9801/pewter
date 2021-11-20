@@ -143,8 +143,11 @@ pub struct MoveSet {
     chunks: ArrayVec<MoveSetChunk, 16>,
 }
 
+
 impl MoveSet {
+    // TODO: This iterator isn't an ExactSizeIterator, but notionally could be
+    // Probably doesn't matter, but perhaps worth exploring when optimizing performance
     pub fn iter(&self) -> impl Iterator<Item = Move> + '_ {
-        self.chunks.iter().map(|c| c.iter()).flatten()
+        self.chunks.iter().flat_map(|c| c.iter())
     }
 }

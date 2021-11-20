@@ -1,5 +1,4 @@
 use crate::{
-    bitboard::BitBoard,
     chessmove::Move,
     coordinates::{BoardPos, File, Rank},
     Piece, State,

@@ -2,7 +2,7 @@ use arrayvec::ArrayVec;
 
 use crate::bitboard::BitBoard;
 use crate::coordinates::BoardPos;
-use crate::Piece;
+use crate::piece::Piece;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Move {

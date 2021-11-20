@@ -1,4 +1,4 @@
-use crate::{color::Color, BoardPos, CastleRights, File, Piece, Rank, State};
+use crate::{color::Color, coordinates::BoardPos, state::CastleRights, coordinates::File, piece::Piece, coordinates::Rank, state::State};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FenParseError {
@@ -149,7 +149,7 @@ fn format_fen_positions(state: &State, out: &mut String) {
         let mut empty_squares = 0;
 
         for file in FEN_FILES.iter() {
-            match state.get(BoardPos::from_file_rank(*file, *rank)) {
+            match state.board.get(BoardPos::from_file_rank(*file, *rank)) {
                 Some((color, piece)) => {
                     if empty_squares > 0 {
                         out.push_str(&format!("{}", empty_squares));

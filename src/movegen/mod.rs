@@ -1,7 +1,7 @@
 use crate::{
     chessmove::Move,
     coordinates::{BoardPos, File, Rank},
-    Piece, State,
+    piece::Piece, state::State,
 };
 
 mod bmi_tables;
@@ -71,7 +71,7 @@ fn knight_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
                 Rank::from_num(to_nums.1 as u8),
             );
 
-            match state.get(to) {
+            match state.board.get(to) {
                 Some((c, _)) if c == state.to_play => continue,
                 _ => {
                     moves.push(Move {
@@ -109,7 +109,7 @@ fn bishop_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
                     Rank::from_num(to_nums.1 as u8),
                 );
 
-                match state.get(to) {
+                match state.board.get(to) {
                     Some((c, _)) if c == state.to_play => break,
                     _ => {
                         moves.push(Move {
@@ -148,7 +148,7 @@ fn rook_pseudo_legal(state: &State, moves: &mut Vec<Move>) {
                     Rank::from_num(to_nums.1 as u8),
                 );
 
-                match state.get(to) {
+                match state.board.get(to) {
                     Some((c, _)) if c == state.to_play => break,
                     _ => {
                         moves.push(Move {

@@ -1,4 +1,4 @@
-use crate::{Piece, bitboard::BitBoard, color::Color, coordinates::BoardPos};
+use crate::{piece::Piece, bitboard::BitBoard, color::Color, coordinates::BoardPos};
 
 pub struct Board {
     piece_boards: [BitBoard; Piece::VARIANT_COUNT],

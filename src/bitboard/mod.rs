@@ -1,6 +1,6 @@
 use std::iter::FromIterator;
 
-use crate::BoardPos;
+use crate::coordinates::BoardPos;
 
 pub mod masks;
 

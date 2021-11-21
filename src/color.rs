@@ -24,10 +24,16 @@ impl Color {
         }
     }
     
+    /// The nth rank as seen by this color
+    /// ```
+    /// # use pewter::{Color, Rank};
+    /// assert_eq!(Color::White.numbered_rank(1), Rank::R1);
+    /// assert_eq!(Color::Black.numbered_rank(2), Rank::R7);
+    /// ```
     pub const fn numbered_rank(self, num: u8) -> Rank {
         let num = match self {
             Color::White => num - 1,
-            Color::Black => 9 - num,
+            Color::Black => 8 - num,
         };
         Rank::from_num(num)
     }

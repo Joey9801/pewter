@@ -107,7 +107,7 @@ impl State {
             }
         }
 
-        // TODO: Include knights and pawns in chekers
+        // TODO: Include knights and pawns in checkers
     }
 
     fn apply_castling(&mut self, m: Move) {

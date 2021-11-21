@@ -65,7 +65,7 @@ impl Board {
 
         // Linear search through the pieces.
         // Could potentially be more efficient to do a sort of binary search through the pieces,
-        // checking against the union of multiple bitboards.
+        // where we check against checking increasingly specific unions.
         // TODO: Benchmark alternative implementations.
         let piece = Piece::iter_all()
             .filter(|p| self.piece_board(*p)[pos])

@@ -1,5 +1,7 @@
 use variant_count::VariantCount;
 
+use crate::Rank;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, VariantCount)]
 pub enum Color {
     White,
@@ -7,7 +9,7 @@ pub enum Color {
 }
 
 impl Color {
-    pub const fn to_num(&self) -> u8 {
+    pub const fn to_num(self) -> u8 {
         match self {
             Color::White => 0,
             Color::Black => 1,
@@ -20,6 +22,14 @@ impl Color {
             1 => Self::Black,
             _ => panic!("Invalid color num"),
         }
+    }
+    
+    pub const fn numbered_rank(self, num: u8) -> Rank {
+        let num = match self {
+            Color::White => num - 1,
+            Color::Black => 9 - num,
+        };
+        Rank::from_num(num)
     }
 }
 

@@ -4,6 +4,11 @@ use crate::bitboard::masks;
 use crate::coordinates::consts::*;
 use crate::{BitBoard, Board, BoardPos, Color, File, Move, Piece, Rank};
 
+pub enum CastleSide {
+    Kingside,
+    Queenside,
+}
+
 bitflags! {
     pub struct CastleRights: u8 {
         const WHITE_KINGSIDE  = 0b0001;
@@ -13,6 +18,19 @@ bitflags! {
 
         const ALL_WHITE = Self::WHITE_KINGSIDE.bits | Self::WHITE_QUEENSIDE.bits;
         const ALL_BLACK = Self::BLACK_KINGSIDE.bits | Self::BLACK_QUEENSIDE.bits;
+    }
+}
+
+impl CastleRights {
+    pub const fn get(self, color: Color, side: CastleSide) -> bool {
+        use Color::*;
+        use CastleSide::*;
+        match (color, side) {
+            (White, Kingside) => self.contains(Self::WHITE_KINGSIDE),
+            (White, Queenside) => self.contains(Self::WHITE_QUEENSIDE),
+            (Black, Kingside) => self.contains(Self::BLACK_KINGSIDE),
+            (Black, Queenside) => self.contains(Self::BLACK_QUEENSIDE),
+        }
     }
 }
 

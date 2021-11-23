@@ -23,7 +23,7 @@ impl Color {
             _ => panic!("Invalid color num"),
         }
     }
-    
+
     /// The nth rank as seen by this color
     /// ```
     /// # use pewter::{Color, Rank};

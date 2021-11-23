@@ -19,10 +19,6 @@ impl BitBoard {
         Self(1 << pos.to_bitboard_offset())
     }
 
-    pub fn xor_inplace(&mut self, arg: BitBoard) {
-        self.0 ^= arg.0
-    }
-
     pub const fn with_set(mut self, pos: BoardPos) -> Self {
         self.0 |= 1u64 << pos.to_bitboard_offset();
         self
@@ -68,6 +64,10 @@ impl BitBoard {
     pub const fn intersect_with(&self, other: Self) -> Self {
         Self(self.0 & other.0)
     }
+    
+    pub const fn xor_with(&self, other: Self) -> Self {
+        Self(self.0 ^ other.0)
+    }
 
     pub fn union_inplace(&mut self, other: Self) {
         *self = self.union_with(other);
@@ -75,6 +75,10 @@ impl BitBoard {
 
     pub fn intersect_inplace(&mut self, other: Self) {
         *self = self.intersect_with(other);
+    }
+
+    pub fn xor_inplace(&mut self, other: BitBoard) {
+        *self = self.xor_with(other)
     }
 
     pub const fn inverse(&self) -> Self {

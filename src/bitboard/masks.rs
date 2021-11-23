@@ -1,5 +1,5 @@
 use crate::coordinates::consts::*;
-use crate::{BoardPos, Color, File, Rank};
+use crate::{BoardPos, CastleSide, Color, File, Rank};
 
 use super::BitBoard;
 
@@ -86,6 +86,8 @@ const fn generate_diag_lookup() -> [BitBoard; 30] {
         let d_idx = (fnum - rnum + 22) as usize;
         let ad_idx = (fnum + rnum) as usize;
 
+        // NB: Can't use BitBoard::set() as the mutable receiver makes it
+        // non-const
         diag_table[d_idx] = diag_table[d_idx].with_set(pos);
         diag_table[ad_idx] = diag_table[ad_idx].with_set(pos);
 
@@ -107,7 +109,7 @@ pub const fn antidiagonal(pos: BoardPos) -> BitBoard {
 
 /// The squares a rook could move to if there were no other pieces on the board
 ///
-/// Doesn't include the stating square
+/// Doesn't include the starting square
 pub const fn rook_rays(pos: BoardPos) -> BitBoard {
     BitBoard::new_empty()
         .union_with(rank(pos.rank))
@@ -117,12 +119,18 @@ pub const fn rook_rays(pos: BoardPos) -> BitBoard {
 
 /// The squares a bishop could move to if there were no other pieces on the board
 ///
-/// Doesn't include the stating square
+/// Doesn't include the starting square
 pub const fn bishop_rays(pos: BoardPos) -> BitBoard {
     BitBoard::new_empty()
         .union_with(diagonal(pos))
         .union_with(antidiagonal(pos))
-        .intersect_with(BitBoard::single(pos).inverse())
+        .with_cleared(pos)
+}
+
+pub const fn queen_rays(pos: BoardPos) -> BitBoard {
+    BitBoard::new_empty()
+        .union_with(rook_rays(pos))
+        .union_with(bishop_rays(pos))
 }
 
 /// All kingside castling moves
@@ -150,6 +158,32 @@ pub const fn castling_moves_all() -> BitBoard {
         .union_with(castling_moves_queenside())
 }
 
+/// The positions that are required to be empty in order to castle kingside
+pub const fn castling_required_empty(color: Color, side: CastleSide) -> BitBoard {
+    use Color::*;
+    use CastleSide::*;
+
+    match (color, side) {
+        (White, Kingside) => between(E1, H1),
+        (Black, Kingside) => between(E8, H8),
+        (White, Queenside) => between(A1, E1),
+        (Black, Queenside) => between(A8, E8),
+    }
+}
+
+/// The positions that are required to be empty in order to castle kingside
+pub const fn castling_required_not_check(color: Color, side: CastleSide) -> BitBoard {
+    use Color::*;
+    use CastleSide::*;
+
+    match (color, side) {
+        (White, Kingside) => between(E1, H1),
+        (Black, Kingside) => between(E8, H8),
+        (White, Queenside) => between(A1, E1),
+        (Black, Queenside) => between(A8, E8),
+    }
+}
+
 pub const fn double_pawn_moves() -> BitBoard {
     BitBoard::new_empty()
         .union_with(rank(Rank::R2))
@@ -158,6 +192,11 @@ pub const fn double_pawn_moves() -> BitBoard {
         .union_with(rank(Rank::R5))
 }
 
+/// An implementation of a line mask that computes it on the fly
+///
+/// The implementation is a little clunky to work around Rust const function
+/// limitations, such that it can be used to populate lookup tables at compile
+/// time.
 const fn line_slow(a: BoardPos, b: BoardPos) -> BitBoard {
     if a.const_eq(&b) {
         BitBoard::new_empty()
@@ -203,6 +242,9 @@ const fn compute_line_table() -> [[BitBoard; 64]; 64] {
 
 static LINE_TABLE: [[BitBoard; 64]; 64] = compute_line_table();
 
+/// Fast lookup table based for line masks.
+///
+/// Returns an empty mask if the two positions do not share a mask.
 pub fn line(a: BoardPos, b: BoardPos) -> BitBoard {
     let a = a.to_bitboard_offset() as usize;
     let b = b.to_bitboard_offset() as usize;
@@ -274,9 +316,10 @@ const fn compute_between_table() -> [[BitBoard; 64]; 64] {
     table
 }
 
-static BETWEEN_TABLE: [[BitBoard; 64]; 64] = compute_between_table();
+const BETWEEN_TABLE: [[BitBoard; 64]; 64] = compute_between_table();
 
-pub fn between(a: BoardPos, b: BoardPos) -> BitBoard {
+
+pub const fn between(a: BoardPos, b: BoardPos) -> BitBoard {
     let a = a.to_bitboard_offset() as usize;
     let b = b.to_bitboard_offset() as usize;
     BETWEEN_TABLE[a][b]

@@ -1,3 +1,5 @@
+use std::iter::FromIterator;
+
 use arrayvec::ArrayVec;
 
 use crate::BitBoard;
@@ -71,6 +73,7 @@ impl Move {
     }
 }
 
+/// Represents a set of moves originating from a single position
 #[derive(Clone, Copy, Debug)]
 pub struct MoveSetChunk {
     pub source: BoardPos,
@@ -93,9 +96,13 @@ impl MoveSetChunk {
             promotion_idx: 0,
         }
     }
-    
+
     pub fn len(self) -> u8 {
         self.dest_set.count()
+    }
+    
+    pub fn any(self) -> bool {
+        self.dest_set.any()
     }
 }
 
@@ -154,27 +161,40 @@ impl ExactSizeIterator for MoveSetChunkIter {}
 
 #[derive(Clone, Debug)]
 pub struct MoveSet {
-    // 17, as the queen is considered separately as a bishop and a rook
-    pub chunks: ArrayVec<MoveSetChunk, 17>,
+    // 16, as there is at most one chunk per piece
+    chunks: ArrayVec<MoveSetChunk, 16>,
 }
 
 impl MoveSet {
     pub fn new_empty() -> Self {
         Self {
-            chunks: ArrayVec::new()
+            chunks: ArrayVec::new(),
         }
     }
     
+    pub fn push(&mut self, chunk: MoveSetChunk) {
+        if chunk.dest_set.any() {
+            self.chunks.push(chunk);
+        }
+    }
+
     pub fn len(&self) -> usize {
-        self.chunks
-            .iter()
-            .map(|c| c.len() as usize)
-            .sum()
+        self.chunks.iter().map(|c| c.len() as usize).sum()
     }
 
     // TODO: This iterator isn't an ExactSizeIterator, but notionally could be
     // Probably doesn't matter, but perhaps worth exploring when optimizing performance
     pub fn iter(&self) -> impl Iterator<Item = Move> + '_ {
         self.chunks.iter().flat_map(|c| c.iter())
+    }
+}
+
+impl FromIterator<MoveSetChunk> for MoveSet {
+    fn from_iter<T: IntoIterator<Item = MoveSetChunk>>(iter: T) -> Self {
+        let mut ms = Self::new_empty();
+        for chunk in iter {
+            ms.chunks.push(chunk);
+        }
+        ms
     }
 }

@@ -22,4 +22,4 @@ pub use crate::chessmove::{Move, MoveSet};
 pub use crate::color::Color;
 pub use crate::coordinates::{BoardPos, File, Rank};
 pub use crate::piece::Piece;
-pub use crate::state::{CastleRights, State};
+pub use crate::state::{CastleSide, CastleRights, State};

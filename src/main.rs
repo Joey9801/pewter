@@ -1,5 +1,5 @@
-use pewter::coordinates::consts::*;
 use pewter::bitboard::masks;
+use pewter::coordinates::consts::*;
 
 fn main() {
     println!("{}", masks::between(B2, G2).pretty_format());

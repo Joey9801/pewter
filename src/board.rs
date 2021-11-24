@@ -1,5 +1,6 @@
 use crate::{BitBoard, BoardPos, Color, Piece};
 
+#[derive(Clone, Copy)]
 pub struct Board {
     piece_boards: [BitBoard; Piece::VARIANT_COUNT],
     color_boards: [BitBoard; Color::VARIANT_COUNT],
@@ -52,6 +53,16 @@ impl Board {
     pub fn intersect_inplace(&mut self, color: Color, piece: Piece, arg: BitBoard) {
         self.color_boards[color.to_num() as usize].intersect_inplace(arg);
         self.piece_boards[piece.to_num() as usize].intersect_inplace(arg);
+    }
+    
+    pub fn set(&mut self, color: Color, piece: Piece, pos: BoardPos) {
+        debug_assert_eq!(self.get(pos), None);
+        self.union_inplace(color, piece, BitBoard::single(pos))
+    }
+    
+    pub fn clear(&mut self, color: Color, piece: Piece, pos: BoardPos) {
+        debug_assert_eq!(self.get(pos), Some((color, piece)));
+        self.intersect_inplace(color, piece, !BitBoard::single(pos))
     }
 
     pub fn get(&self, pos: BoardPos) -> Option<(Color, Piece)> {

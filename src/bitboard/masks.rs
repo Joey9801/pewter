@@ -184,12 +184,15 @@ pub const fn castling_required_not_check(color: Color, side: CastleSide) -> BitB
     }
 }
 
-pub const fn double_pawn_moves() -> BitBoard {
-    BitBoard::new_empty()
-        .union_with(rank(Rank::R2))
-        .union_with(rank(Rank::R4))
-        .union_with(rank(Rank::R7))
-        .union_with(rank(Rank::R5))
+pub const fn double_pawn_moves(color: Color) -> BitBoard {
+    match color {
+        Color::White => BitBoard::new_empty()
+            .union_with(rank(Rank::R2))
+            .union_with(rank(Rank::R4)),
+        Color::Black => BitBoard::new_empty()
+            .union_with(rank(Rank::R7))
+            .union_with(rank(Rank::R5)),
+    }
 }
 
 /// An implementation of a line mask that computes it on the fly

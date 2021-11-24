@@ -81,9 +81,14 @@ fn pawn_special(state: &State, pos: BoardPos, chunk: &mut MoveSetChunk) {
         Some(pos) => pos,
         None => return,
     };
-    
-    let old_pawn_pos = ep_pos.forward(!state.to_play).unwrap();
 
+    let pa = pseudo_legal::pawn_attacks(state.to_play, pos, BitBoard::single(ep_pos));
+    if !pa.any() {
+        return;
+    }
+
+    let old_pawn_pos = ep_pos.forward(!state.to_play).unwrap();
+    
     // The all-union board as it would be after the en-passant move
     let blockers = state.board.all_union_board()
         .with_set(ep_pos)
@@ -117,15 +122,22 @@ fn pawn_special(state: &State, pos: BoardPos, chunk: &mut MoveSetChunk) {
 fn legal_king_pos(state: &State, pos: BoardPos) -> bool {
     // The all union board, but with the our king moved to the proposed position
     let combined = state.board.all_union_board()
-        .intersect_with(state.board.color_piece_board(state.to_play, Piece::King))
+        .intersect_with(!state.board.color_piece_board(state.to_play, Piece::King))
         .with_set(pos);
 
-    let sliding_dangers = BitBoard::new_empty()
+    let rooks = BitBoard::new_empty()
         .union_with(state.board.piece_board(Piece::Rook))
+        .union_with(state.board.piece_board(Piece::Queen))
+        .intersect_with(state.board.color_board(!state.to_play))
+        .intersect_with(masks::rook_rays(pos));
+
+    let bishops = BitBoard::new_empty()
         .union_with(state.board.piece_board(Piece::Bishop))
         .union_with(state.board.piece_board(Piece::Queen))
         .intersect_with(state.board.color_board(!state.to_play))
-        .intersect_with(masks::queen_rays(pos));
+        .intersect_with(masks::bishop_rays(pos));
+    
+    let sliding_dangers = rooks.union_with(bishops);
     
     let sliding_piece_check = sliding_dangers.iter_set()
         .map(|attacker_pos| masks::between(pos, attacker_pos))

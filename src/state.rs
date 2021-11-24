@@ -34,6 +34,7 @@ impl CastleRights {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct State {
     pub to_play: Color,
 
@@ -77,40 +78,33 @@ impl State {
             .expect("Expect valid game states to always have a king for each color")
     }
 
-    fn set(&mut self, color: Color, piece: Piece, pos: BoardPos) {
-        self.board
-            .union_inplace(color, piece, BitBoard::single(pos));
-    }
-
-    fn clear(&mut self, color: Color, piece: Piece, pos: BoardPos) {
-        self.board
-            .intersect_inplace(color, piece, BitBoard::single(pos));
-    }
-
-    fn get(&self, pos: BoardPos) -> Option<(Color, Piece)> {
-        self.board.get(pos)
-    }
-
-    fn set_pinners_and_checkers(&mut self) {
+    fn set_pins_and_checks(&mut self) {
+        // A mask that selects all the pieces that are currently pinned
         self.pinned = BitBoard::new_empty();
+        
+        // A mask that selects all the enemy pieces that are currently giving check
         self.checkers = BitBoard::new_empty();
+        
+        let our_color = self.to_play;
+        let opp_color = !our_color;
 
-        let k_pos = self.king_pos(self.to_play);
-        let color = self.board.color_board(!self.to_play);
+        let k_pos = self.king_pos(our_color);
+        let k_mask = BitBoard::single(k_pos);
+        let opp_color_mask = self.board.color_board(opp_color);
         let queens = self.board.piece_board(Piece::Queen);
 
         let pinner_bishops = self
             .board
             .piece_board(Piece::Bishop)
             .union_with(queens)
-            .intersect_with(color)
+            .intersect_with(opp_color_mask)
             .intersect_with(masks::bishop_rays(k_pos));
 
         let pinner_rooks = self
             .board
             .piece_board(Piece::Rook)
             .union_with(queens)
-            .intersect_with(color)
+            .intersect_with(opp_color_mask)
             .intersect_with(masks::rook_rays(k_pos));
 
         let all_pinners = pinner_bishops.union_with(pinner_rooks);
@@ -125,7 +119,25 @@ impl State {
             }
         }
 
-        // TODO: Include knights and pawns in checkers
+        use crate::movegen::pseudo_legal::{pawn_attacks, knight_moves};
+
+        for pawn in self.board
+            .color_piece_board(opp_color, Piece::Pawn)
+            .iter_set()
+        {
+            if pawn_attacks(!self.to_play, pawn, k_mask).any() {
+                self.checkers.set(pawn);
+            }
+        }
+        
+        for knight in self.board
+            .color_piece_board(opp_color, Piece::Knight)
+            .iter_set()
+        {
+            if knight_moves(knight, k_mask.inverse()).any() {
+                self.checkers.set(knight);
+            }
+        }
     }
 
     fn apply_castling(&mut self, m: Move) {
@@ -231,81 +243,92 @@ impl State {
             }
         }
 
-        pretty_format(|pos| sym(self.get(pos)))
+        pretty_format(|pos| sym(self.board.get(pos)))
     }
 
     /// Applies a move, panicking if the move doesn't fit.
     ///
     /// When panicking, may leave this object in an invalid state.
-    pub fn apply_move(&mut self, m: Move) {
+    pub fn apply_move(&self, m: Move) -> Self {
+        let mut next_state = *self;
+
+        next_state.checkers = BitBoard::new_empty();
+        next_state.pinned = BitBoard::new_empty();
+
+        let our_color = self.to_play;
+        let opp_color = !self.to_play;
+
         let from_bb = BitBoard::single(m.from);
         let to_bb = BitBoard::single(m.to);
         let move_bb = from_bb | to_bb;
 
-        let (_color, piece) = self.get(m.from).expect("No piece on square being moved");
-        debug_assert!(_color == self.to_play);
+        let (_color, piece) = next_state.board.get(m.from).expect("No piece on square being moved");
+        debug_assert_eq!(_color, our_color);
 
-        let capture_piece = self.get(m.to).map(|(c, p)| {
-            debug_assert!(c == !self.to_play);
+        let capture_piece = next_state.board.get(m.to).map(|(c, p)| {
+            debug_assert_eq!(c, opp_color);
             p
         });
-
-        let op = BitBoard::single(m.from).union_with(BitBoard::single(m.to));
-        self.board.xor_inplace(self.to_play, piece, op);
 
         // Handle all regular captures, where the destination square was
         // previously occupied by the piece being captured
         if let Some(capture_piece) = capture_piece {
-            self.clear(!self.to_play, capture_piece, m.to);
+            next_state.board.clear(opp_color, capture_piece, m.to);
+
         }
 
-        // Handle en-passant captures
-        if self.en_passant == Some(m.to) {
-            debug_assert!(piece == Piece::Pawn);
 
+        let op = BitBoard::single(m.from).union_with(BitBoard::single(m.to));
+        next_state.board.xor_inplace(our_color, piece, op);
+
+
+        // Handle en-passant captures
+        if next_state.en_passant == Some(m.to) && piece == Piece::Pawn{
             // The pos that we expect to find the ep-capturable pawn
-            let ep_pawn_pos = match !self.to_play {
+            let ep_pawn_pos = match opp_color {
                 Color::White => BoardPos::from_file_rank(m.to.file, Rank::R4),
                 Color::Black => BoardPos::from_file_rank(m.to.file, Rank::R5),
             };
-            self.clear(!self.to_play, Piece::Pawn, ep_pawn_pos);
+            next_state.board.clear(opp_color, Piece::Pawn, ep_pawn_pos);
         }
 
-        if move_bb & masks::castling_moves_all() == move_bb {
-            self.apply_castling(m);
+        if piece == Piece::King && (move_bb & masks::castling_moves_all() == move_bb) {
+            next_state.apply_castling(m);
         }
-        self.update_castling_rights(m, piece, capture_piece);
+        next_state.update_castling_rights(m, piece, capture_piece);
 
         // Update the en-passant capturable state
-        if (piece == Piece::Pawn) && (move_bb & masks::double_pawn_moves() == move_bb) {
-            let rank = match self.to_play {
+        if (piece == Piece::Pawn) && (move_bb & masks::double_pawn_moves(our_color) == move_bb) {
+            let rank = match next_state.to_play {
                 Color::White => Rank::R3,
                 Color::Black => Rank::R6,
             };
-            self.en_passant = Some(BoardPos::from_file_rank(m.from.file, rank));
+            next_state.en_passant = Some(BoardPos::from_file_rank(m.from.file, rank));
         } else {
-            self.en_passant = None;
+            next_state.en_passant = None;
         }
 
         if let Some(promotion) = m.promotion {
-            debug_assert!(piece == Piece::Pawn);
+            debug_assert_eq!(piece, Piece::Pawn);
             debug_assert!(m.to.rank == Rank::R1 || m.to.rank == Rank::R8);
-            self.clear(self.to_play, Piece::Pawn, m.to);
-            self.set(self.to_play, promotion, m.to);
+            next_state.board.clear(our_color, Piece::Pawn, m.to);
+            next_state.board.set(our_color, promotion, m.to);
         }
 
         if capture_piece.is_some() || piece == Piece::Pawn {
-            self.halfmove_clock = 0;
+            next_state.halfmove_clock = 0;
         } else {
-            self.halfmove_clock += 1;
+            next_state.halfmove_clock += 1;
         }
 
-        self.set_pinners_and_checkers();
 
-        if self.to_play == Color::Black {
-            self.fullmove_counter += 1;
+        if next_state.to_play == Color::Black {
+            next_state.fullmove_counter += 1;
         }
-        self.to_play = !self.to_play;
+        next_state.to_play = !next_state.to_play;
+        
+        next_state.set_pins_and_checks();
+        next_state
     }
 }
 
@@ -368,12 +391,12 @@ mod test {
     }
 
     fn test_apply_move_helper(fen_start: &str, lan_move: &str, expected_fen_end: &str) {
-        let mut state =
+        let state =
             parse_fen(fen_start).expect("Expected test case to have valid starting FEN string");
         let m = Move::from_long_algebraic(lan_move)
             .expect("Expected test case to have valid LAN move string");
 
-        state.apply_move(m);
+        let state = state.apply_move(m);
 
         assert_eq!(expected_fen_end, format_fen(&state));
     }

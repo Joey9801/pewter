@@ -85,7 +85,7 @@ fn pawn_pushes(
     dest_set
 }
 
-fn pawn_attacks(color: Color, source: BoardPos, opp_pieces: BitBoard) -> BitBoard {
+pub fn pawn_attacks(color: Color, source: BoardPos, opp_pieces: BitBoard) -> BitBoard {
     let mut dest_set = BitBoard::new_empty();
     let single_dest = source.forward(color).unwrap();
 

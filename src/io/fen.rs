@@ -104,6 +104,8 @@ pub fn parse_fen(fen_str: &str) -> Result<State, FenParseError> {
 
     let placement_str = fields.next().ok_or(FenParseError::MissingFields)?;
     parse_fen_placements(placement_str, &mut state)?;
+    
+    state.recompute_pins_and_checks();
 
     match fields.next().map(|s| s.chars().next()).flatten() {
         Some('w') => state.to_play = Color::White,

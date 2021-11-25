@@ -87,16 +87,16 @@ fn pawn_pushes(
 
 pub fn pawn_attacks(color: Color, source: BoardPos, opp_pieces: BitBoard) -> BitBoard {
     let mut dest_set = BitBoard::new_empty();
-    let single_dest = source.forward(color).unwrap();
-
-    if let Some(attack_pos) = single_dest.left() {
-        if opp_pieces[attack_pos] {
-            dest_set.set(attack_pos)
+    if let Some(single_dest) = source.forward(color) {
+        if let Some(attack_pos) = single_dest.left() {
+            if opp_pieces[attack_pos] {
+                dest_set.set(attack_pos)
+            }
         }
-    }
-    if let Some(attack_pos) = single_dest.right() {
-        if opp_pieces[attack_pos] {
-            dest_set.set(attack_pos)
+        if let Some(attack_pos) = single_dest.right() {
+            if opp_pieces[attack_pos] {
+                dest_set.set(attack_pos)
+            }
         }
     }
     
@@ -207,7 +207,15 @@ const KING_MOVE_OFFSETS: &[(i8, i8)] = &[
 
 
 fn king_pseudo_legal(source: BoardPos, our_pieces: BitBoard) -> MoveSetChunk {
-    let mut chunk = MoveSetChunk::new_empty(source);
+    MoveSetChunk {
+        source,
+        dest_set: king_moves(source, our_pieces),
+        promotion: false,
+    }
+}
+
+pub fn king_moves(source: BoardPos, our_pieces: BitBoard) -> BitBoard {
+    let mut moves = BitBoard::new_empty();
 
     let source_nums = (source.file.to_num() as i8, source.rank.to_num() as i8);
     for dest_nums in KING_MOVE_OFFSETS
@@ -221,11 +229,11 @@ fn king_pseudo_legal(source: BoardPos, our_pieces: BitBoard) -> MoveSetChunk {
             Rank::from_num(dest_nums.1 as u8),
         );
 
-        chunk.dest_set.set(dest);
+        moves.set(dest);
     }
     
-    chunk.dest_set.intersect_inplace(!our_pieces);
-    chunk
+    moves.intersect_inplace(!our_pieces);
+    moves
 }
 
 #[cfg(test)]

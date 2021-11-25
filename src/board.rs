@@ -95,7 +95,6 @@ impl Board {
         self.xor_inplace(color, piece, mask);
     }
 
-    #[cfg(test)]
     pub fn sanity_check_board(&self) {
         // The individual piece boards should not overlap
         for a in Piece::iter_all() {

@@ -61,7 +61,7 @@ impl Move {
 
         if let Some(promotion) = self.promotion {
             out.push(match promotion {
-                Piece::Rook => 'q',
+                Piece::Rook => 'r',
                 Piece::Knight => 'n',
                 Piece::Bishop => 'b',
                 Piece::Queen => 'q',
@@ -110,7 +110,7 @@ impl MoveSetChunk {
     }
 
     pub fn len(self) -> u8 {
-        self.dest_set.count()
+        self.dest_set.count() * if self.promotion { 4 } else { 1 }
     }
     
     pub fn any(self) -> bool {

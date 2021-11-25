@@ -78,7 +78,7 @@ impl State {
             .expect("Expect valid game states to always have a king for each color")
     }
 
-    fn set_pins_and_checks(&mut self) {
+    pub fn recompute_pins_and_checks(&mut self) {
         // A mask that selects all the pieces that are currently pinned
         self.pinned = BitBoard::new_empty();
         
@@ -138,6 +138,8 @@ impl State {
                 self.checkers.set(knight);
             }
         }
+        
+        self.pinned.intersect_inplace(self.board.color_board(our_color));
     }
 
     fn apply_castling(&mut self, m: Move) {
@@ -277,7 +279,6 @@ impl State {
 
         }
 
-
         let op = BitBoard::single(m.from).union_with(BitBoard::single(m.to));
         next_state.board.xor_inplace(our_color, piece, op);
 
@@ -327,7 +328,7 @@ impl State {
         }
         next_state.to_play = !next_state.to_play;
         
-        next_state.set_pins_and_checks();
+        next_state.recompute_pins_and_checks();
         next_state
     }
 }

@@ -5,7 +5,7 @@ pub mod legal;
 
 pub fn perft(state: crate::State, depth: u8) -> usize {
     match depth {
-        0 => 0,
+        0 => 1,
         1 => legal::legal_moves(&state).len(),
         _ => legal::legal_moves(&state)
             .iter()
@@ -60,13 +60,6 @@ mod tests {
     
     #[test]
     fn perft_test_starting() {
-        // Only test deeper cases when in release mode, to stop this test taking too long
-        #[cfg(debug_assertions)]
-        let max_depth = 4;
-
-        #[cfg(not(debug_assertions))]
-        let max_depth = 6;
-
         perft_helper(
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
             &[
@@ -74,23 +67,9 @@ mod tests {
                 400,
                 8_902,
                 197_281,
-                4_865_609,
-                119_060_324,
-            ][..max_depth]
+            ]
         );
     }
-    
-    // #[test]
-    // fn foo() {
-    //     let mut s = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-
-    //     for m in ["a2a4", "b7b5", "a4a5", "b5b4"].iter() {
-    //         let m = crate::Move::from_long_algebraic(m).unwrap();
-    //         s = s.apply_move(m);
-    //     }
-    //     
-    //     perft_helper_inner(s, &[20, 436]);
-    // }
     
     #[test]
     fn perft_test_pos_2() {
@@ -99,9 +78,32 @@ mod tests {
             &[
                 48,
                 2_039,
-                97_682,
-                4_085_603,
-                193_690_690,
+                97_862,
+            ]
+        )
+    }
+    
+    #[test]
+    fn perft_test_pos_3() {
+        perft_helper(
+            "r1b1k1nr/ppq2p1p/6pb/4p3/2BpP3/5QPP/PPPN4/R3K2R w KQkq - 1 13",
+            &[
+                47,
+                1_598,
+                66_482,
+            ]
+        )
+    }
+    
+    #[test]
+    fn perft_test_pos_4() {
+        // NB: explicitly testing an en-passant move that is illegal as it reveals a check
+        perft_helper(
+            "7k/3p4/8/K1P4r/8/8/8/8 w - - 0 1",
+            &[
+                5,
+                80,
+                514
             ]
         )
     }

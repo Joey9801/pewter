@@ -45,7 +45,9 @@ pub fn legal_moves(state: &State) -> MoveSet {
 
             for pos in non_pinned_pieces.iter_set() {
                 let mut chunk = legal_move_chunk(state, piece, pos, check_mask);
-                chunk.dest_set.intersect_inplace(check_mask);
+                if piece != Piece::King {
+                    chunk.dest_set.intersect_inplace(check_mask);
+                }
                 move_set.push(chunk);
             }
         }
@@ -78,7 +80,7 @@ fn legal_move_chunk(state: &State, piece: Piece, pos: BoardPos, check_mask: BitB
 // Handles adding en-passant moves
 fn pawn_special(state: &State, pos: BoardPos, chunk: &mut MoveSetChunk) {
     let ep_pos = match state.en_passant {
-        Some(pos) => pos,
+        Some(ep_pos) => ep_pos,
         None => return,
     };
 
@@ -100,16 +102,23 @@ fn pawn_special(state: &State, pos: BoardPos, chunk: &mut MoveSetChunk) {
     let opp_board = state.board.color_board(!state.to_play);
     
     // The set of opposition rooks/bishops/queens that have a line to our king
-    let dangers = BitBoard::new_empty()
+    let rooks = BitBoard::new_empty()
         .union_with(state.board.piece_board(Piece::Rook))
+        .union_with(state.board.piece_board(Piece::Queen))
+        .intersect_with(opp_board)
+        .intersect_with(masks::rook_rays(k_pos));
+
+    let bishops = BitBoard::new_empty()
         .union_with(state.board.piece_board(Piece::Bishop))
         .union_with(state.board.piece_board(Piece::Queen))
         .intersect_with(opp_board)
-        .intersect_with(masks::queen_rays(k_pos));
+        .intersect_with(masks::bishop_rays(k_pos));
+    
+    let sliding_dangers = rooks.union_with(bishops);
 
     // It is a legal en-passant move if every dangerous sliding piece has at least one blocker in
     // the way after the move has been executed.
-    let legal_ep_move = dangers.iter_set()
+    let legal_ep_move = sliding_dangers.iter_set()
         .map(|danger_pos| masks::between(k_pos, danger_pos))
         .map(|mask| blockers.intersect_with(mask))
         .all(|blockers| blockers.any());
@@ -147,8 +156,18 @@ fn legal_king_pos(state: &State, pos: BoardPos) -> bool {
     let knight_check = state.board.color_piece_board(!state.to_play, Piece::Knight)
         .intersect_with(pseudo_legal::knight_moves(pos, BitBoard::new_empty()))
         .any();
+    
+    let pawns = state.board.color_piece_board(!state.to_play, Piece::Pawn);
+    let pawn_check = pawns
+        .intersect_with(pseudo_legal::pawn_attacks(state.to_play, pos, pawns))
+        .any();
+    
+    let opp_king = state.board.color_piece_board(!state.to_play, Piece::King);
+    let king_check = opp_king
+        .intersect_with(pseudo_legal::king_moves(pos, BitBoard::new_empty()))
+        .any();
 
-    !(sliding_piece_check || knight_check || pawn_check)
+    !(sliding_piece_check || knight_check || pawn_check || king_check)
 }
 
 /// Handles filtering out illegal king moves and adding castling moves
@@ -162,12 +181,17 @@ fn king_special(state: &State, k_pos: BoardPos, chunk: &mut MoveSetChunk) {
     }
     chunk.dest_set = legal_regular_moves;
 
+    // Only even start to consider castling if the king isn't currently in check
+    if state.checkers.any() {
+        return;
+    }
+
     // Castling
     if state.castle_rights.get(state.to_play, CastleSide::Kingside) {
         let mask = masks::castling_required_empty(state.to_play, CastleSide::Kingside);
         if !state.board.all_union_board().intersect_with(mask).any() {
-            let passing = k_pos.left().unwrap();
-            let dest  = passing.left().unwrap();
+            let passing = k_pos.right().unwrap();
+            let dest  = passing.right().unwrap();
             
             if legal_king_pos(state, passing) && legal_king_pos(state, dest) {
                 chunk.dest_set.set(dest);
@@ -178,8 +202,8 @@ fn king_special(state: &State, k_pos: BoardPos, chunk: &mut MoveSetChunk) {
     if state.castle_rights.get(state.to_play, CastleSide::Queenside) {
         let mask = masks::castling_required_empty(state.to_play, CastleSide::Queenside);
         if !state.board.all_union_board().intersect_with(mask).any() {
-            let passing = k_pos.right().unwrap();
-            let dest  = passing.right().unwrap();
+            let passing = k_pos.left().unwrap();
+            let dest  = passing.left().unwrap();
             
             if legal_king_pos(state, passing) && legal_king_pos(state, dest) {
                 chunk.dest_set.set(dest);

@@ -41,7 +41,6 @@ impl StockfishInterface {
 
         let mut line = String::new();
         stdout.read_line(&mut line).unwrap();
-        dbg!(line);
 
         Self {
             child
@@ -74,7 +73,7 @@ impl StockfishInterface {
             .stdout
             .as_mut()
             .expect("Expected stockfish handle to have a stdout");
-        let mut lines = BufReader::new(stdout).lines();
+        let lines = BufReader::new(stdout).lines();
 
         let mut output = Vec::new();
         let mut done = 0;
@@ -115,6 +114,9 @@ enum PerftComparison {
 }
 
 fn compare_perft_outputs(mut a: Vec<(Move, usize)>, mut b: Vec<(Move, usize)>) -> PerftComparison  {
+    a.sort_by_key(|(m, _count)| *m);
+    b.sort_by_key(|(m, _count)| *m);
+
     let a_set = a.iter().map(|(m, _)| m).collect::<HashSet<_>>();
     let b_set = b.iter().map(|(m, _)| m).collect::<HashSet<_>>();
     match a_set.symmetric_difference(&b_set).next() {
@@ -129,9 +131,6 @@ fn compare_perft_outputs(mut a: Vec<(Move, usize)>, mut b: Vec<(Move, usize)>) -
         }
         None => (),
     }
-
-    a.sort_by_key(|(m, count)| *m);
-    b.sort_by_key(|(m, count)| *m);
     
     for ((m, a_count), (_m, b_count)) in a.iter().zip(b.iter()) {
         if a_count != b_count {
@@ -163,7 +162,9 @@ fn find_minimal_difference(initial_state: State, mut sf: StockfishInterface, max
                 move_difference: md
             }),
             PerftComparison::SubtreeSizeDiff(m) => {
+                println!("Found difference after making {}, refining...", m);
                 state = state.apply_move(m);
+                state.board.sanity_check_board();
                 depth -= 1;
             }
         }
@@ -191,7 +192,7 @@ fn main() {
     let initial_state = parse_fen(&fen_str)
         .expect("Expected a valid FEN string for the first argument");
     
-    if let Some(diff) = find_minimal_difference(initial_state, sf, 5) {
+    if let Some(diff) = find_minimal_difference(initial_state, sf, 10) {
         println!("At the following position:");
         println!("fen: \"{}\"", format_fen(&diff.position));
         println!("{}", diff.position.pretty_format());
@@ -200,5 +201,12 @@ fn main() {
             MoveDifference::ExtraMove(m) => println!("Pewter emitted the move \"{}\" while Stockfish did not", m),
             MoveDifference::MissingMove(m) => println!("Stockfish emitted the move \"{}\" while Pewter did not", m),
         }
+        
+        println!("Assorted state information:");
+        println!("En-passant = {:?}", diff.position.en_passant);
+        println!("Pinned:");
+        println!("{}", diff.position.pinned.pretty_format());
+        println!("Checkers:");
+        println!("{}", diff.position.checkers.pretty_format());
     }
 }

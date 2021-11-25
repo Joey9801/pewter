@@ -148,7 +148,7 @@ fn legal_king_pos(state: &State, pos: BoardPos) -> bool {
         .intersect_with(pseudo_legal::knight_moves(pos, BitBoard::new_empty()))
         .any();
 
-    !(sliding_piece_check || knight_check)
+    !(sliding_piece_check || knight_check || pawn_check)
 }
 
 /// Handles filtering out illegal king moves and adding castling moves

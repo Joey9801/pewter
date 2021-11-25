@@ -1,6 +1,6 @@
 use variant_count::VariantCount;
 
-#[derive(Clone, Copy, Debug, VariantCount, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, VariantCount, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Piece {
     Pawn,
     Rook,

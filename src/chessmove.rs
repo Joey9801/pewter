@@ -6,7 +6,7 @@ use crate::BitBoard;
 use crate::BoardPos;
 use crate::Piece;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Move {
     pub from: BoardPos,
     pub to: BoardPos,
@@ -42,7 +42,7 @@ impl Move {
         };
 
         if algebraic_str.as_bytes().len() > 4 {
-            let p = match &algebraic_str[5..6] {
+            let p = match &algebraic_str[4..5] {
                 "q" => Piece::Queen,
                 "r" => Piece::Rook,
                 "b" => Piece::Bishop,
@@ -70,6 +70,18 @@ impl Move {
         }
 
         out
+    }
+}
+
+impl std::fmt::Debug for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.format_long_algebraic())
+    }
+}
+
+impl std::fmt::Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 

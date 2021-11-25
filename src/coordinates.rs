@@ -1,6 +1,6 @@
 use crate::Color;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Rank {
     R1,
     R2,
@@ -71,7 +71,19 @@ impl Rank {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+impl std::fmt::Debug for Rank {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_num() + 1)
+    }
+}
+
+impl std::fmt::Display for Rank {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum File {
     A,
     B,
@@ -117,7 +129,28 @@ impl File {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+impl std::fmt::Debug for File {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::A => write!(f, "A"),
+            Self::B => write!(f, "B"),
+            Self::C => write!(f, "C"),
+            Self::D => write!(f, "D"),
+            Self::E => write!(f, "E"),
+            Self::F => write!(f, "F"),
+            Self::G => write!(f, "G"),
+            Self::H => write!(f, "H"),
+        }
+    }
+}
+
+impl std::fmt::Display for File {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BoardPos {
     pub rank: Rank,
     pub file: File,
@@ -250,6 +283,18 @@ impl BoardPos {
 impl From<(Rank, File)> for BoardPos {
     fn from((rank, file): (Rank, File)) -> Self {
         Self { rank, file }
+    }
+}
+
+impl std::fmt::Debug for BoardPos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.file, self.rank)
+    }
+}
+
+impl std::fmt::Display for BoardPos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 

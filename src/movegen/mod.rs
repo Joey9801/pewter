@@ -37,7 +37,7 @@ mod tests {
             let sw = Instant::now();
 
             let breakdown = perft_breakdown(initial_state, depth as u8);
-            let total = breakdown.iter().map(|(m, count)| count).sum::<usize>();
+            let total = breakdown.iter().map(|(_m, count)| count).sum::<usize>();
             
             // Print the breakdown for debugging iff the assert is going to fail
             if total != *expected {
@@ -104,6 +104,21 @@ mod tests {
                 5,
                 80,
                 514
+            ]
+        )
+    }
+    
+    #[test]
+    fn perft_test_pos_5() {
+        // NB: At depth 5 ends up testing that you are allowed to capture a pawn that is giving check en-passant
+        perft_helper(
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+            &[
+                14,
+                191,
+                2_812,
+                43_238,
+                674_624
             ]
         )
     }

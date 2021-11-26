@@ -44,10 +44,7 @@ pub fn legal_moves(state: &State) -> MoveSet {
                 .intersect_with(non_pinned_color_mask);
 
             for pos in non_pinned_pieces.iter_set() {
-                let mut chunk = legal_move_chunk(state, piece, pos, check_mask);
-                if piece != Piece::King {
-                    chunk.dest_set.intersect_inplace(check_mask);
-                }
+                let chunk = legal_move_chunk(state, piece, pos, check_mask);
                 move_set.push(chunk);
             }
         }
@@ -65,20 +62,18 @@ fn legal_move_chunk(state: &State, piece: Piece, pos: BoardPos, check_mask: BitB
     let mut chunk = super::pseudo_legal::pseudo_legal_moves(state, piece, pos);
     
     match piece {
-        Piece::Pawn => pawn_special(state, pos, &mut chunk),
+        Piece::Pawn => pawn_special(state, pos, &mut chunk, check_mask),
         Piece::King => king_special(state, pos, &mut chunk),
-        _ => (),
-    }
-    
-    if piece != Piece::King {
-        chunk.dest_set.intersect_with(check_mask);
+        _ => chunk.dest_set.intersect_inplace(check_mask),
     }
     
     chunk
 }
 
 // Handles adding en-passant moves
-fn pawn_special(state: &State, pos: BoardPos, chunk: &mut MoveSetChunk) {
+fn pawn_special(state: &State, pos: BoardPos, chunk: &mut MoveSetChunk, check_mask: BitBoard) {
+    chunk.dest_set.intersect_inplace(check_mask);
+
     let ep_pos = match state.en_passant {
         Some(ep_pos) => ep_pos,
         None => return,
@@ -90,6 +85,11 @@ fn pawn_special(state: &State, pos: BoardPos, chunk: &mut MoveSetChunk) {
     }
 
     let old_pawn_pos = ep_pos.forward(!state.to_play).unwrap();
+    
+    if state.checkers.intersect_with(!BitBoard::single(old_pawn_pos)).any() {
+        // There are pieces giving check that are not this pawn
+        return;
+    }
     
     // The all-union board as it would be after the en-passant move
     let blockers = state.board.all_union_board()

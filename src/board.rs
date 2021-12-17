@@ -73,15 +73,35 @@ impl Board {
         } else {
             return None;
         };
+        
+        let p = self.piece_board(Piece::Pawn);
+        let r = self.piece_board(Piece::Rook);
+        let n = self.piece_board(Piece::Knight);
+        let b = self.piece_board(Piece::Bishop);
+        let k = self.piece_board(Piece::King);
 
-        // Linear search through the pieces.
-        // Could potentially be more efficient to do a sort of binary search through the pieces,
-        // where we check against checking increasingly specific unions.
-        // TODO: Benchmark alternative implementations.
-        let piece = Piece::iter_all()
-            .filter(|p| self.piece_board(*p)[pos])
-            .next()
-            .expect("Board piece/color bitboards are inconsistent");
+        // Tree-style search benchmarked a little faster than a linear search through each piece
+        let piece = if (p | r)[pos] {
+            if p[pos] {
+                Piece::Pawn
+            } else {
+                Piece::Rook
+            }
+        } else {
+            if (n | b)[pos] {
+                if n[pos] {
+                    Piece::Knight
+                } else {
+                    Piece::Bishop
+                }
+            } else {
+                if k[pos] {
+                    Piece::King
+                } else {
+                    Piece::Queen
+                }
+            }
+        };
 
         Some((color, piece))
     }

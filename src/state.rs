@@ -262,7 +262,7 @@ impl State {
 
         let from_bb = BitBoard::single(m.from);
         let to_bb = BitBoard::single(m.to);
-        let move_bb = from_bb | to_bb;
+        let move_bb = from_bb.union_with(to_bb);
 
         let (_color, piece) = next_state.board.get(m.from).expect("No piece on square being moved");
         debug_assert_eq!(_color, our_color);
@@ -275,12 +275,12 @@ impl State {
         // Handle all regular captures, where the destination square was
         // previously occupied by the piece being captured
         if let Some(capture_piece) = capture_piece {
-            next_state.board.clear(opp_color, capture_piece, m.to);
+            next_state.board.xor_inplace(opp_color, capture_piece, to_bb);
 
         }
 
-        let op = BitBoard::single(m.from).union_with(BitBoard::single(m.to));
-        next_state.board.xor_inplace(our_color, piece, op);
+        // let op = BitBoard::single(m.from).union_with(BitBoard::single(m.to));
+        next_state.board.xor_inplace(our_color, piece, move_bb);
 
 
         // Handle en-passant captures

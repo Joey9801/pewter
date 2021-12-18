@@ -1,4 +1,7 @@
+//! (De)Serialization for UCI messages
+
 use std::time::Duration;
+use std::fmt::Write;
 
 use crate::Move;
 
@@ -220,7 +223,7 @@ pub struct InfoCurrLine {
     pub line: Vec<Move>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default,PartialEq, Eq)]
 pub struct InfoMessage {
     /// Search depth in plies.
     pub depth: Option<u16>,
@@ -236,7 +239,7 @@ pub struct InfoMessage {
     /// The number of nodes searched.
     ///
     /// The engine should send this regularly.
-    pub nodes: Option<Duration>,
+    pub nodes: Option<u64>,
 
     /// In MultiPV mode, the index of the pv being sent in this message
     pub multipv: Option<u16>,
@@ -296,6 +299,40 @@ pub enum OptionType {
 
     /// A text field that has a string as a value
     String,
+}
+
+/// This command tells the GUI which parameters can be changed in the engine.
+///
+/// This should be sent once for each option at engine startup after the "uci" and the "id"
+/// commands if any parameter can be changed in the engine. The GUI should parse this and build
+/// a dialog for the user to change the settings.
+///
+/// If the user wants to change some settings, the GUI will send a "setoption" command to the
+/// engine.
+///
+/// Note that not every option needs to appear in this dialog. Some options like "Ponder",
+/// "UCI_AnalyseMode", etc. are better handled elsewhere or are set automatically.
+/// Note that the GUI need not send the setoption command when starting the engine for every
+/// option if it doesn't want to change the default value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OptionMessage {
+    pub option_name: String,
+
+    /// Which type the option is (eg number in range, checkbox, etc..)
+    pub option_type: OptionType,
+
+    /// The value that the engine will use for this option if no matching
+    /// EngineCommand::SetOption is received.
+    pub default: Option<String>,
+
+    /// For integer range options, the minimum supported values (inclusive).
+    pub min: Option<i32>,
+
+    /// For integer range options, the maximum supported values (inclusive).
+    pub max: Option<i32>,
+
+    /// For OptionType::Combo, the valid strings
+    pub combo_options: Option<Vec<String>>,
 }
 
 /// The messages that the engine may send to the interface
@@ -364,33 +401,7 @@ pub enum EngineMessage {
     /// selected infos or multiple infos with one info command.
     Info(InfoMessage),
 
-    /// This command tells the GUI which parameters can be changed in the engine.
-    ///
-    /// This should be sent once for each option at engine startup after the "uci" and the "id"
-    /// commands if any parameter can be changed in the engine. The GUI should parse this and build
-    /// a dialog for the user to change the settings.
-    ///
-    /// If the user wants to change some settings, the GUI will send a "setoption" command to the
-    /// engine.
-    ///
-    /// Note that not every option needs to appear in this dialog. Some options like "Ponder",
-    /// "UCI_AnalyseMode", etc. are better handled elsewhere or are set automatically.
-    /// Note that the GUI need not send the setoption command when starting the engine for every
-    /// option if it doesn't want to change the default value.
-    Option {
-        /// Which type the option is (eg number in range, checkbox, etc..)
-        option_type: OptionType,
-
-        /// The value that the engine will use for this option if no matching
-        /// EngineCommand::SetOption is received.
-        default: String,
-
-        /// For integer range options, the minimum/maximum supported values (inclusive).
-        min_max: Option<(i32, i32)>,
-
-        /// For OptionType::Combo, the valid strings
-        combo_options: Option<Vec<String>>,
-    },
+    Option(OptionMessage),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -567,7 +578,6 @@ pub fn parse_command(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseE
     let invalid_cmd = || EngineCommandParseError::InvalidCommand(cmd_str.to_string());
 
     let cmd = match parts.next() {
-        None => Err(EngineCommandParseError::EmptyCommand)?,
         Some("uci") => EngineCommand::Uci,
         Some("debug") => {
             let arg = match parts.next() {
@@ -587,9 +597,169 @@ pub fn parse_command(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseE
         Some("ponderhit") => EngineCommand::PonderHit,
         Some("quit") => EngineCommand::Quit,
         Some(_) => Err(invalid_cmd())?,
+        None => Err(EngineCommandParseError::EmptyCommand)?,
     };
 
     Ok(cmd)
+}
+
+fn format_info_message(msg: InfoMessage) -> String {
+    let mut out = String::from("info");
+    
+    if let Some(x) = msg.depth {
+        write!(out, " depth {}", x).unwrap();
+    }
+    
+    if let Some(x) = msg.selective_depth {
+        write!(out, " seldepth {}", x).unwrap();
+    }
+    
+    if let Some(x) = msg.time {
+        write!(out, " time {}", x.as_millis()).unwrap();
+    }
+    
+    if let Some(x) = msg.nodes {
+        write!(out, " nodes {}", x).unwrap();
+    }
+
+    if let Some(x) = msg.principal_variation {
+        write!(out, " pv").unwrap();
+        for m in x {
+            write!(out, " {:?}", m).unwrap();
+        }
+    }
+    
+    if let Some(x) = msg.multipv {
+        write!(out, " multipv {}", x).unwrap();
+    }
+    
+    if let Some(x) = msg.score {
+        write!(out, " score {}", x.centipawns).unwrap();
+        if let Some(mate) = x.mate {
+            write!(out, " mate {}", mate).unwrap();
+        }
+        
+        if x.lowerbound {
+            write!(out, " lowerbound").unwrap();
+        }
+        
+        if x.upperbound {
+            write!(out, " upperbound").unwrap();
+        }
+    }
+    
+    if let Some(x) = msg.curr_move {
+        write!(out, " currmove {:?}", x).unwrap();
+    }
+    
+    if let Some(x) = msg.curr_move_number {
+        write!(out, " currmovenumber {}", x).unwrap();
+    }
+    
+    if let Some(x) = msg.hash_full {
+        write!(out, " hashfull {}", x).unwrap();
+    }
+    
+    if let Some(x) = msg.nodes_per_second {
+        write!(out, " nps {}", x).unwrap();
+    }
+    
+    if let Some(x) = msg.table_hits {
+        write!(out, " tbhits {}", x).unwrap();
+    }
+    
+    if let Some(x) = msg.shredder_hits {
+        write!(out, " sbhits {}", x).unwrap();
+    }
+    
+    if let Some(x) = msg.cpu_load {
+        write!(out, " cpuload {}", x).unwrap();
+    }
+    
+    if let Some(x) = msg.refutation {
+        write!(out, " refutation {:?}", x.refuted_move).unwrap();
+        for m in x.refutation_line {
+            write!(out, " {:?}", m).unwrap();
+        }
+    }
+    
+    if let Some(x) = msg.current_line {
+        write!(out, " currline").unwrap();
+        if let Some(cpu_number) = x.cpu_number {
+            write!(out, " {}", cpu_number).unwrap();
+        }
+
+        for m in x.line {
+            write!(out, " {:?}", m).unwrap();
+        }
+    }
+    
+    // NB the string has to come last, as it will cause the rest of the line to be parsed as the
+    // string contents.
+    if let Some(x) = msg.string {
+        write!(out, " string {}", x).unwrap();
+    }
+
+    out
+}
+
+fn format_option_message(msg: OptionMessage) -> String {
+    let mut out = format!("option name {}", msg.option_name);
+    
+    match msg.option_type {
+        OptionType::Check => write!(out, " type check"),
+        OptionType::Spin => write!(out, " type spin"),
+        OptionType::Combo => write!(out, " type combo"),
+        OptionType::Button => write!(out, " type button"),
+        OptionType::String => write!(out, " type string"),
+    }.unwrap();
+    
+    if let Some(default) = msg.default {
+        write!(out, " default {}", default).unwrap();
+    }
+
+    if let Some(min) = msg.min {
+        write!(out, " min {}", min).unwrap();
+    }
+
+    if let Some(max) = msg.max {
+        write!(out, " max {}", max).unwrap();
+    }
+    
+    if let Some(combo_options) = msg.combo_options {
+        for c in combo_options {
+            write!(out, " var {}", c).unwrap();
+        }
+    }
+
+    out
+}
+
+pub fn format_message(msg: EngineMessage) -> String {
+    match msg {
+        EngineMessage::Id(id) => match id {
+            EngineId::Name(name) => format!("id name {}", name),
+            EngineId::Author(author) => format!("id author {}", author),
+        }
+        EngineMessage::UciOk => format!("uciok"),
+        EngineMessage::ReadyOk => format!("readyok"),
+        EngineMessage::BestMove { best_move, ponder_move } => match ponder_move {
+            Some(p) => format!("bestmove {:?} ponder {:?}", best_move, p),
+            None => format!("bestmove {:?}", best_move),
+        }
+        EngineMessage::CopyProtection(c) => match c{
+            CopyProtectionMessage::Checking => format!("copprotection checking"),
+            CopyProtectionMessage::Ok => format!("copprotection ok"),
+            CopyProtectionMessage::Error => format!("copprotection error"),
+        },
+        EngineMessage::Registration(r) => match r {
+            RegistrationMessage::Checking => format!("registration checking"),
+            RegistrationMessage::Ok => format!("registration ok"),
+            RegistrationMessage::Error => format!("registration error"),
+        }
+        EngineMessage::Info(i) => format_info_message(i),
+        EngineMessage::Option(o) => format_option_message(o),
+    }
 }
 
 #[cfg(test)]

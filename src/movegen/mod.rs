@@ -1,7 +1,6 @@
 pub mod bmi;
-pub mod pseudo_legal;
 pub mod legal;
-
+pub mod pseudo_legal;
 
 pub fn perft(state: crate::State, depth: u8) -> usize {
     match depth {
@@ -10,7 +9,7 @@ pub fn perft(state: crate::State, depth: u8) -> usize {
         _ => legal::legal_moves(&state)
             .iter()
             .map(|m| perft(state.apply_move(m), depth - 1))
-            .sum()
+            .sum(),
     }
 }
 
@@ -18,7 +17,10 @@ pub fn perft_breakdown(state: crate::State, depth: u8) -> Vec<(crate::Move, usiz
     match depth {
         0 => vec![],
         1 => legal::legal_moves(&state).iter().map(|m| (m, 1)).collect(),
-        _ => legal::legal_moves(&state).iter().map(|m| (m, perft(state.apply_move(m), depth - 1))).collect()
+        _ => legal::legal_moves(&state)
+            .iter()
+            .map(|m| (m, perft(state.apply_move(m), depth - 1)))
+            .collect(),
     }
 }
 
@@ -38,7 +40,7 @@ mod tests {
 
             let breakdown = perft_breakdown(initial_state, depth as u8);
             let total = breakdown.iter().map(|(_m, count)| count).sum::<usize>();
-            
+
             // Print the breakdown for debugging iff the assert is going to fail
             if total != *expected {
                 dbg!(depth);
@@ -50,51 +52,38 @@ mod tests {
             println!("   Depth {} successful, time = {:?}", depth, sw.elapsed());
         }
     }
-    
+
     fn perft_helper(fen_str: &str, expected_values: &[usize]) {
-        let initial_state = parse_fen(fen_str)
-            .expect("Expected unit test to have valid FEN string");
+        let initial_state =
+            parse_fen(fen_str).expect("Expected unit test to have valid FEN string");
         dbg!(fen_str);
         perft_helper_inner(initial_state, expected_values);
     }
-    
+
     #[test]
     fn perft_test_starting() {
         perft_helper(
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-            &[
-                20,
-                400,
-                8_902,
-                197_281,
-            ]
+            &[20, 400, 8_902, 197_281],
         );
     }
-    
+
     #[test]
     fn perft_test_pos_2() {
         perft_helper(
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
-            &[
-                48,
-                2_039,
-                97_862,
-            ]
+            &[48, 2_039, 97_862],
         )
     }
-    
+
     #[test]
     fn perft_test_pos_3() {
         perft_helper(
             "r1b1k1nr/ppq2p1p/6pb/4p3/2BpP3/5QPP/PPPN4/R3K2R w KQkq - 1 13",
-            &[
-                47,
-                1_598,
-                66_482,
-            ]
+            &[47, 1_598, 66_482],
         )
     }
-    
+
     #[test]
     fn perft_test_pos_4() {
         // NB: explicitly testing an en-passant move that is illegal as it reveals a check

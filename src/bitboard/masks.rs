@@ -160,8 +160,8 @@ pub const fn castling_moves_all() -> BitBoard {
 
 /// The positions that are required to be empty in order to castle kingside
 pub const fn castling_required_empty(color: Color, side: CastleSide) -> BitBoard {
-    use Color::*;
     use CastleSide::*;
+    use Color::*;
 
     match (color, side) {
         (White, Kingside) => between(E1, H1),
@@ -173,8 +173,8 @@ pub const fn castling_required_empty(color: Color, side: CastleSide) -> BitBoard
 
 /// The positions that are required to be empty in order to castle kingside
 pub const fn castling_required_not_check(color: Color, side: CastleSide) -> BitBoard {
-    use Color::*;
     use CastleSide::*;
+    use Color::*;
 
     match (color, side) {
         (White, Kingside) => between(E1, H1),
@@ -320,7 +320,6 @@ const fn compute_between_table() -> [[BitBoard; 64]; 64] {
 }
 
 const BETWEEN_TABLE: [[BitBoard; 64]; 64] = compute_between_table();
-
 
 pub const fn between(a: BoardPos, b: BoardPos) -> BitBoard {
     let a = a.to_bitboard_offset() as usize;

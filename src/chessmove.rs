@@ -112,7 +112,7 @@ impl MoveSetChunk {
     pub fn len(self) -> u8 {
         self.dest_set.count() * if self.promotion { 4 } else { 1 }
     }
-    
+
     pub fn any(self) -> bool {
         self.dest_set.any()
     }
@@ -183,7 +183,7 @@ impl MoveSet {
             chunks: ArrayVec::new(),
         }
     }
-    
+
     pub fn push(&mut self, chunk: MoveSetChunk) {
         if chunk.dest_set.any() {
             self.chunks.push(chunk);

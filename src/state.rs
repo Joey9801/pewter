@@ -23,8 +23,8 @@ bitflags! {
 
 impl CastleRights {
     pub const fn get(self, color: Color, side: CastleSide) -> bool {
-        use Color::*;
         use CastleSide::*;
+        use Color::*;
         match (color, side) {
             (White, Kingside) => self.contains(Self::WHITE_KINGSIDE),
             (White, Queenside) => self.contains(Self::WHITE_QUEENSIDE),
@@ -81,10 +81,10 @@ impl State {
     pub fn recompute_pins_and_checks(&mut self) {
         // A mask that selects all the pieces that are currently pinned
         self.pinned = BitBoard::new_empty();
-        
+
         // A mask that selects all the enemy pieces that are currently giving check
         self.checkers = BitBoard::new_empty();
-        
+
         let our_color = self.to_play;
         let opp_color = !our_color;
 
@@ -119,9 +119,10 @@ impl State {
             }
         }
 
-        use crate::movegen::pseudo_legal::{pawn_attacks, knight_moves};
+        use crate::movegen::pseudo_legal::{knight_moves, pawn_attacks};
 
-        for pawn in self.board
+        for pawn in self
+            .board
             .color_piece_board(opp_color, Piece::Pawn)
             .iter_set()
         {
@@ -129,8 +130,9 @@ impl State {
                 self.checkers.set(pawn);
             }
         }
-        
-        for knight in self.board
+
+        for knight in self
+            .board
             .color_piece_board(opp_color, Piece::Knight)
             .iter_set()
         {
@@ -138,8 +140,9 @@ impl State {
                 self.checkers.set(knight);
             }
         }
-        
-        self.pinned.intersect_inplace(self.board.color_board(our_color));
+
+        self.pinned
+            .intersect_inplace(self.board.color_board(our_color));
     }
 
     fn apply_castling(&mut self, m: Move) {
@@ -264,7 +267,10 @@ impl State {
         let to_bb = BitBoard::single(m.to);
         let move_bb = from_bb.union_with(to_bb);
 
-        let (_color, piece) = next_state.board.get(m.from).expect("No piece on square being moved");
+        let (_color, piece) = next_state
+            .board
+            .get(m.from)
+            .expect("No piece on square being moved");
         debug_assert_eq!(_color, our_color);
 
         let capture_piece = next_state.board.get(m.to).map(|(c, p)| {
@@ -275,16 +281,16 @@ impl State {
         // Handle all regular captures, where the destination square was
         // previously occupied by the piece being captured
         if let Some(capture_piece) = capture_piece {
-            next_state.board.xor_inplace(opp_color, capture_piece, to_bb);
-
+            next_state
+                .board
+                .xor_inplace(opp_color, capture_piece, to_bb);
         }
 
         // let op = BitBoard::single(m.from).union_with(BitBoard::single(m.to));
         next_state.board.xor_inplace(our_color, piece, move_bb);
 
-
         // Handle en-passant captures
-        if next_state.en_passant == Some(m.to) && piece == Piece::Pawn{
+        if next_state.en_passant == Some(m.to) && piece == Piece::Pawn {
             // The pos that we expect to find the ep-capturable pawn
             let ep_pawn_pos = match opp_color {
                 Color::White => BoardPos::from_file_rank(m.to.file, Rank::R4),
@@ -322,12 +328,11 @@ impl State {
             next_state.halfmove_clock += 1;
         }
 
-
         if next_state.to_play == Color::Black {
             next_state.fullmove_counter += 1;
         }
         next_state.to_play = !next_state.to_play;
-        
+
         next_state.recompute_pins_and_checks();
         next_state
     }

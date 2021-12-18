@@ -64,7 +64,7 @@ impl BitBoard {
     pub const fn intersect_with(&self, other: Self) -> Self {
         Self(self.0 & other.0)
     }
-    
+
     pub const fn xor_with(&self, other: Self) -> Self {
         Self(self.0 ^ other.0)
     }

@@ -1,10 +1,16 @@
-use crate::{BitBoard, BoardPos, Color, File, MoveSet, Piece, Rank, State, chessmove::MoveSetChunk};
+use crate::{
+    chessmove::MoveSetChunk, BitBoard, BoardPos, Color, File, MoveSet, Piece, Rank, State,
+};
 
 pub fn all_pseudo_legal(state: &State) -> MoveSet {
     let mut ms = MoveSet::new_empty();
 
     for piece in Piece::iter_all() {
-        for pos in state.board.color_piece_board(state.to_play, piece).iter_set() {
+        for pos in state
+            .board
+            .color_piece_board(state.to_play, piece)
+            .iter_set()
+        {
             let chunk = pseudo_legal_moves(state, piece, pos);
             ms.push(chunk);
         }
@@ -20,11 +26,7 @@ pub fn all_pseudo_legal(state: &State) -> MoveSet {
 ///    - Castling
 /// As both of these types of move have more in depth legality checking, and are handled specially
 /// in the full legal move generator.
-pub fn pseudo_legal_moves(
-    state: &State,
-    piece: Piece,
-    source: BoardPos,
-) -> MoveSetChunk {
+pub fn pseudo_legal_moves(state: &State, piece: Piece, source: BoardPos) -> MoveSetChunk {
     let color = state.to_play;
     let our_pieces = state.board.color_board(color);
     let opp_pieces = state.board.color_board(!color);
@@ -56,7 +58,11 @@ fn pawn_psuedo_legal(
     let dest_set = pawn_pushes(color, source, our_pieces, opp_pieces)
         .union_with(pawn_attacks(color, source, opp_pieces));
     let promotion = source.rank == color.numbered_rank(7);
-    MoveSetChunk { source, dest_set, promotion }
+    MoveSetChunk {
+        source,
+        dest_set,
+        promotion,
+    }
 }
 
 fn pawn_pushes(
@@ -99,10 +105,9 @@ pub fn pawn_attacks(color: Color, source: BoardPos, opp_pieces: BitBoard) -> Bit
             }
         }
     }
-    
+
     dest_set
 }
-
 
 const KNIGHT_MOVE_OFFSETS: &[(i8, i8)] = &[
     (2, -1),
@@ -139,11 +144,10 @@ pub fn knight_moves(source: BoardPos, blockers: BitBoard) -> BitBoard {
 
         moves.set(dest);
     }
-    
+
     moves.intersect_inplace(!blockers);
     moves
 }
-
 
 fn sliding_piece_pseudo_legal(
     source: BoardPos,
@@ -179,7 +183,7 @@ fn sliding_piece_pseudo_legal(
 
             chunk.dest_set.set(dest);
             if opp_pieces.intersect_with(dest_mask).any() {
-                break
+                break;
             }
         }
     }
@@ -187,12 +191,8 @@ fn sliding_piece_pseudo_legal(
     chunk
 }
 
-const BISHOP_DIRS: [(i8, i8); 4] = [
-    (-1, -1), (-1, 1), (1, -1), (1, 1)
-];
-const ROOK_DIRS: [(i8, i8); 4] = [
-    (1, 0), (-1, 0), (0, 1), (0, -1)
-];
+const BISHOP_DIRS: [(i8, i8); 4] = [(-1, -1), (-1, 1), (1, -1), (1, 1)];
+const ROOK_DIRS: [(i8, i8); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
 
 const KING_MOVE_OFFSETS: &[(i8, i8)] = &[
     (-1, 1),
@@ -204,7 +204,6 @@ const KING_MOVE_OFFSETS: &[(i8, i8)] = &[
     (-1, 0),
     (1, 0),
 ];
-
 
 fn king_pseudo_legal(source: BoardPos, our_pieces: BitBoard) -> MoveSetChunk {
     MoveSetChunk {
@@ -231,7 +230,7 @@ pub fn king_moves(source: BoardPos, our_pieces: BitBoard) -> BitBoard {
 
         moves.set(dest);
     }
-    
+
     moves.intersect_inplace(!our_pieces);
     moves
 }

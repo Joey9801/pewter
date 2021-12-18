@@ -54,12 +54,12 @@ impl Board {
         self.color_boards[color.to_num() as usize].intersect_inplace(arg);
         self.piece_boards[piece.to_num() as usize].intersect_inplace(arg);
     }
-    
+
     pub fn set(&mut self, color: Color, piece: Piece, pos: BoardPos) {
         debug_assert_eq!(self.get(pos), None);
         self.union_inplace(color, piece, BitBoard::single(pos))
     }
-    
+
     pub fn clear(&mut self, color: Color, piece: Piece, pos: BoardPos) {
         debug_assert_eq!(self.get(pos), Some((color, piece)));
         self.intersect_inplace(color, piece, !BitBoard::single(pos))
@@ -73,7 +73,7 @@ impl Board {
         } else {
             return None;
         };
-        
+
         let p = self.piece_board(Piece::Pawn);
         let r = self.piece_board(Piece::Rook);
         let n = self.piece_board(Piece::Knight);

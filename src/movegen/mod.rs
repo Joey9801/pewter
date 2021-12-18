@@ -87,28 +87,12 @@ mod tests {
     #[test]
     fn perft_test_pos_4() {
         // NB: explicitly testing an en-passant move that is illegal as it reveals a check
-        perft_helper(
-            "7k/3p4/8/K1P4r/8/8/8/8 w - - 0 1",
-            &[
-                5,
-                80,
-                514
-            ]
-        )
+        perft_helper("7k/3p4/8/K1P4r/8/8/8/8 w - - 0 1", &[5, 80, 514])
     }
-    
+
     #[test]
     fn perft_test_pos_5() {
-        // NB: At depth 5 ends up testing that you are allowed to capture a pawn that is giving check en-passant
-        perft_helper(
-            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
-            &[
-                14,
-                191,
-                2_812,
-                43_238,
-                674_624
-            ]
-        )
+        // NB: At depth 2 tests that you are allowed to capture a pawn that is giving check en-passant
+        perft_helper("8/1p3k2/8/2P5/2K5/8/8/8 b - - 0 1", &[10, 80, 688])
     }
 }

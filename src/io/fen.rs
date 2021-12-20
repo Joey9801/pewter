@@ -21,6 +21,14 @@ pub enum FenParseError {
     InvalidNumber,
 }
 
+impl std::fmt::Display for FenParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for FenParseError {}
+
 fn format_piece_symbol(color: Color, piece: Piece) -> char {
     match (color, piece) {
         (Color::Black, Piece::Pawn) => 'p',

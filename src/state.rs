@@ -34,7 +34,7 @@ impl CastleRights {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct State {
     pub to_play: Color,
 
@@ -76,6 +76,11 @@ impl State {
         self.board
             .king_pos(color)
             .expect("Expect valid game states to always have a king for each color")
+    }
+
+    /// Is `self.to_play` in check
+    pub fn in_check(&self) -> bool {
+        self.checkers.any()
     }
 
     pub fn recompute_pins_and_checks(&mut self) {

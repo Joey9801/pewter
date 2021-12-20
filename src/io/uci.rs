@@ -1,7 +1,11 @@
 //! (De)Serialization for UCI messages
 
-use std::time::Duration;
+use anyhow::Result;
+use crossbeam_channel::{select, unbounded, Receiver, Sender};
 use std::fmt::Write;
+use std::io::BufRead;
+use std::sync::RwLock;
+use std::time::Duration;
 
 use crate::Move;
 
@@ -50,13 +54,13 @@ pub struct GoCommand {
     pub moves_to_go: Option<u16>,
 
     /// Only search to a depth this many plies
-    pub depth: Option<u16>,
+    pub depth: Option<u8>,
 
     /// Only search this many nodes
-    pub nodes: Option<u16>,
+    pub nodes: Option<u64>,
 
     /// Search for mate in this many moves
-    pub mate: Option<u16>,
+    pub mate: Option<u8>,
 
     /// Spend exactly this long searching
     pub move_time: Option<Duration>,
@@ -67,7 +71,7 @@ pub struct GoCommand {
 
 /// The commands that the engine may recieve from the interface
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EngineCommand {
+pub enum UciCommand {
     /// Tells the engine to use UCI
     ///
     /// This will be sent once as a first command after program boot to tell the engine to switch
@@ -223,7 +227,7 @@ pub struct InfoCurrLine {
     pub line: Vec<Move>,
 }
 
-#[derive(Clone, Debug, Default,PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct InfoMessage {
     /// Search depth in plies.
     pub depth: Option<u16>,
@@ -337,7 +341,7 @@ pub struct OptionMessage {
 
 /// The messages that the engine may send to the interface
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum EngineMessage {
+pub enum UciMessage {
     /// Must be sent after receiving the "uci" command to identify the engine,
     Id(EngineId),
 
@@ -416,7 +420,7 @@ pub enum EngineCommandParseError {
     InvalidCommand(String),
 }
 
-fn parse_setoption(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseError> {
+fn parse_setoption(cmd_str: &str) -> Result<UciCommand, EngineCommandParseError> {
     assert!(cmd_str.starts_with("setoption"));
 
     // TODO: this parse function is too brittle - it doesn't work if the value is given before the name
@@ -437,15 +441,15 @@ fn parse_setoption(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseErr
         .map(|idx| idx + "value".len())
         .map(|idx| cmd_str[idx..].trim().to_string());
 
-    Ok(EngineCommand::SetOption { option_name, value })
+    Ok(UciCommand::SetOption { option_name, value })
 }
 
-fn parse_register(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseError> {
+fn parse_register(cmd_str: &str) -> Result<UciCommand, EngineCommandParseError> {
     assert!(cmd_str.starts_with("register"));
     let invalid_cmd = || EngineCommandParseError::InvalidCommand(cmd_str.to_string());
 
     if cmd_str == "register later" {
-        return Ok(EngineCommand::Register {
+        return Ok(UciCommand::Register {
             name: None,
             code: None,
         });
@@ -474,10 +478,10 @@ fn parse_register(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseErro
         .map(|(start, end)| (start + "code".len(), end))
         .map(|(start, end)| cmd_str[start..end].trim().to_string());
 
-    Ok(EngineCommand::Register { name, code })
+    Ok(UciCommand::Register { name, code })
 }
 
-fn parse_position(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseError> {
+fn parse_position(cmd_str: &str) -> Result<UciCommand, EngineCommandParseError> {
     let mut parts = cmd_str.split_ascii_whitespace();
 
     assert_eq!(parts.next(), Some("position"));
@@ -512,14 +516,14 @@ fn parse_position(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseErro
         Some(_) => Err(EngineCommandParseError::InvalidCommand(cmd_str.to_string()))?,
     };
 
-    Ok(EngineCommand::Position { position, moves })
+    Ok(UciCommand::Position { position, moves })
 }
 
-fn parse_go(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseError> {
+fn parse_go(cmd_str: &str) -> Result<UciCommand, EngineCommandParseError> {
     let invalid_cmd = || EngineCommandParseError::InvalidCommand(cmd_str.to_string());
 
     let parse_int = |parts: &mut dyn Iterator<Item = &str>| match parts.next() {
-        Some(s) => s.parse().map_err(|_| invalid_cmd()),
+        Some(s) => s.parse::<u64>().map_err(|_| invalid_cmd()),
         None => Err(invalid_cmd()),
     };
 
@@ -559,43 +563,43 @@ fn parse_go(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseError> {
             "btime" => go_cmd.black_time = Some(parse_milliseconds(&mut parts)?),
             "winc" => go_cmd.white_increment = Some(parse_milliseconds(&mut parts)?),
             "binc" => go_cmd.black_increment = Some(parse_milliseconds(&mut parts)?),
-            "movestogo" => go_cmd.moves_to_go = Some(parse_int(&mut parts)?),
-            "depth" => go_cmd.depth = Some(parse_int(&mut parts)?),
+            "movestogo" => go_cmd.moves_to_go = Some(parse_int(&mut parts)? as u16),
+            "depth" => go_cmd.depth = Some(parse_int(&mut parts)? as u8),
             "nodes" => go_cmd.nodes = Some(parse_int(&mut parts)?),
-            "mate" => go_cmd.mate = Some(parse_int(&mut parts)?),
+            "mate" => go_cmd.mate = Some(parse_int(&mut parts)? as u8),
             "movetime" => go_cmd.move_time = Some(parse_milliseconds(&mut parts)?),
             "infinite" => go_cmd.infinite = true,
             _ => Err(invalid_cmd())?,
         }
     }
 
-    Ok(EngineCommand::Go(go_cmd))
+    Ok(UciCommand::Go(go_cmd))
 }
 
-pub fn parse_command(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseError> {
+pub fn parse_command(cmd_str: &str) -> Result<UciCommand, EngineCommandParseError> {
     let mut parts = cmd_str.splitn(2, " ");
 
     let invalid_cmd = || EngineCommandParseError::InvalidCommand(cmd_str.to_string());
 
     let cmd = match parts.next() {
-        Some("uci") => EngineCommand::Uci,
+        Some("uci") => UciCommand::Uci,
         Some("debug") => {
             let arg = match parts.next() {
                 Some("true") => true,
                 Some("false") => false,
                 _ => Err(invalid_cmd())?,
             };
-            EngineCommand::Debug(arg)
+            UciCommand::Debug(arg)
         }
-        Some("isready") => EngineCommand::IsReady,
+        Some("isready") => UciCommand::IsReady,
         Some("setoption") => parse_setoption(cmd_str)?,
         Some("register") => parse_register(cmd_str)?,
-        Some("ucinewgame") => EngineCommand::UciNewGame,
+        Some("ucinewgame") => UciCommand::UciNewGame,
         Some("position") => parse_position(cmd_str)?,
         Some("go") => parse_go(cmd_str)?,
-        Some("stop") => EngineCommand::Stop,
-        Some("ponderhit") => EngineCommand::PonderHit,
-        Some("quit") => EngineCommand::Quit,
+        Some("stop") => UciCommand::Stop,
+        Some("ponderhit") => UciCommand::PonderHit,
+        Some("quit") => UciCommand::Quit,
         Some(_) => Err(invalid_cmd())?,
         None => Err(EngineCommandParseError::EmptyCommand)?,
     };
@@ -605,19 +609,19 @@ pub fn parse_command(cmd_str: &str) -> Result<EngineCommand, EngineCommandParseE
 
 fn format_info_message(msg: InfoMessage) -> String {
     let mut out = String::from("info");
-    
+
     if let Some(x) = msg.depth {
         write!(out, " depth {}", x).unwrap();
     }
-    
+
     if let Some(x) = msg.selective_depth {
         write!(out, " seldepth {}", x).unwrap();
     }
-    
+
     if let Some(x) = msg.time {
         write!(out, " time {}", x.as_millis()).unwrap();
     }
-    
+
     if let Some(x) = msg.nodes {
         write!(out, " nodes {}", x).unwrap();
     }
@@ -628,61 +632,61 @@ fn format_info_message(msg: InfoMessage) -> String {
             write!(out, " {:?}", m).unwrap();
         }
     }
-    
+
     if let Some(x) = msg.multipv {
         write!(out, " multipv {}", x).unwrap();
     }
-    
+
     if let Some(x) = msg.score {
         write!(out, " score {}", x.centipawns).unwrap();
         if let Some(mate) = x.mate {
             write!(out, " mate {}", mate).unwrap();
         }
-        
+
         if x.lowerbound {
             write!(out, " lowerbound").unwrap();
         }
-        
+
         if x.upperbound {
             write!(out, " upperbound").unwrap();
         }
     }
-    
+
     if let Some(x) = msg.curr_move {
         write!(out, " currmove {:?}", x).unwrap();
     }
-    
+
     if let Some(x) = msg.curr_move_number {
         write!(out, " currmovenumber {}", x).unwrap();
     }
-    
+
     if let Some(x) = msg.hash_full {
         write!(out, " hashfull {}", x).unwrap();
     }
-    
+
     if let Some(x) = msg.nodes_per_second {
         write!(out, " nps {}", x).unwrap();
     }
-    
+
     if let Some(x) = msg.table_hits {
         write!(out, " tbhits {}", x).unwrap();
     }
-    
+
     if let Some(x) = msg.shredder_hits {
         write!(out, " sbhits {}", x).unwrap();
     }
-    
+
     if let Some(x) = msg.cpu_load {
         write!(out, " cpuload {}", x).unwrap();
     }
-    
+
     if let Some(x) = msg.refutation {
         write!(out, " refutation {:?}", x.refuted_move).unwrap();
         for m in x.refutation_line {
             write!(out, " {:?}", m).unwrap();
         }
     }
-    
+
     if let Some(x) = msg.current_line {
         write!(out, " currline").unwrap();
         if let Some(cpu_number) = x.cpu_number {
@@ -693,7 +697,7 @@ fn format_info_message(msg: InfoMessage) -> String {
             write!(out, " {:?}", m).unwrap();
         }
     }
-    
+
     // NB the string has to come last, as it will cause the rest of the line to be parsed as the
     // string contents.
     if let Some(x) = msg.string {
@@ -705,15 +709,16 @@ fn format_info_message(msg: InfoMessage) -> String {
 
 fn format_option_message(msg: OptionMessage) -> String {
     let mut out = format!("option name {}", msg.option_name);
-    
+
     match msg.option_type {
         OptionType::Check => write!(out, " type check"),
         OptionType::Spin => write!(out, " type spin"),
         OptionType::Combo => write!(out, " type combo"),
         OptionType::Button => write!(out, " type button"),
         OptionType::String => write!(out, " type string"),
-    }.unwrap();
-    
+    }
+    .unwrap();
+
     if let Some(default) = msg.default {
         write!(out, " default {}", default).unwrap();
     }
@@ -725,7 +730,7 @@ fn format_option_message(msg: OptionMessage) -> String {
     if let Some(max) = msg.max {
         write!(out, " max {}", max).unwrap();
     }
-    
+
     if let Some(combo_options) = msg.combo_options {
         for c in combo_options {
             write!(out, " var {}", c).unwrap();
@@ -735,30 +740,120 @@ fn format_option_message(msg: OptionMessage) -> String {
     out
 }
 
-pub fn format_message(msg: EngineMessage) -> String {
+pub fn format_message(msg: UciMessage) -> String {
     match msg {
-        EngineMessage::Id(id) => match id {
+        UciMessage::Id(id) => match id {
             EngineId::Name(name) => format!("id name {}", name),
             EngineId::Author(author) => format!("id author {}", author),
-        }
-        EngineMessage::UciOk => format!("uciok"),
-        EngineMessage::ReadyOk => format!("readyok"),
-        EngineMessage::BestMove { best_move, ponder_move } => match ponder_move {
+        },
+        UciMessage::UciOk => format!("uciok"),
+        UciMessage::ReadyOk => format!("readyok"),
+        UciMessage::BestMove {
+            best_move,
+            ponder_move,
+        } => match ponder_move {
             Some(p) => format!("bestmove {:?} ponder {:?}", best_move, p),
             None => format!("bestmove {:?}", best_move),
-        }
-        EngineMessage::CopyProtection(c) => match c{
+        },
+        UciMessage::CopyProtection(c) => match c {
             CopyProtectionMessage::Checking => format!("copprotection checking"),
             CopyProtectionMessage::Ok => format!("copprotection ok"),
             CopyProtectionMessage::Error => format!("copprotection error"),
         },
-        EngineMessage::Registration(r) => match r {
+        UciMessage::Registration(r) => match r {
             RegistrationMessage::Checking => format!("registration checking"),
             RegistrationMessage::Ok => format!("registration ok"),
             RegistrationMessage::Error => format!("registration error"),
+        },
+        UciMessage::Info(i) => format_info_message(i),
+        UciMessage::Option(o) => format_option_message(o),
+    }
+}
+
+pub trait UciOptions: Default {
+    type SetOptionError;
+
+    fn all_options() -> Vec<OptionMessage>;
+    fn set_value(&mut self, option_name: &str, value: &str) -> Result<(), Self::SetOptionError>;
+}
+
+pub struct UciInterface<Options: UciOptions> {
+    pub tx: Sender<UciMessage>,
+    pub rx: Receiver<UciCommand>,
+    pub opts: RwLock<Options>,
+}
+
+impl<Options: UciOptions> UciInterface<Options> {
+    /// Spawns the IO thread and negotiates intial setup over the interface
+    pub fn startup() -> Result<Self> {
+        let (messages_tx, messages_rx) = unbounded();
+        let (commands_tx, commands_rx) = unbounded();
+
+        std::thread::Builder::new()
+            .name("UCI broker".to_string())
+            .spawn(|| uci_interface_thread(messages_rx, commands_tx))?;
+
+        Ok(Self {
+            opts: Options::default().into(),
+            tx: messages_tx,
+            rx: commands_rx,
+        })
+    }
+}
+
+fn uci_interface_thread(messages_rx: Receiver<UciMessage>, commands_tx: Sender<UciCommand>) {
+    use std::io::Write;
+
+    let stdout = std::io::stdout();
+    let mut stdout_handle = stdout.lock();
+
+    let (stdin_lines_tx, stdin_lines_rx) = unbounded();
+
+    // TODO: clean up this thread on shutdown explicitly.
+    std::thread::Builder::new()
+        .name("UCI reader".to_string())
+        .spawn(move || {
+            let stdin = std::io::stdin();
+            let stdin_handle = stdin.lock();
+            let mut lines = stdin_handle.lines();
+            while let Some(Ok(line)) = lines.next() {
+                stdin_lines_tx
+                    .send(line)
+                    .expect("Error pushing raw UCI command to internal channel");
+            }
+        }).expect("Failed to start UCI reader thread");
+
+    loop {
+        select! {
+            recv(messages_rx) -> msg => {
+                let msg = match msg {
+                    Ok(msg) => msg,
+                    Err(_) => {
+                        log::info!("UCI messages channel disconnected, shutting down UCI threads");
+                        break;
+                    }
+                };
+                log::debug!("Sending message {:?}", msg);
+                write!(stdout_handle, "{}\n", format_message(msg))
+                    .expect("Error sending UCI message to interface");
+            },
+            recv(stdin_lines_rx) -> line => {
+                let line = match line {
+                    Ok(line) => line,
+                    Err(_) => {
+                        log::info!("EOF received on stdin, sending implicit Quit command and stopping UCI thread");
+                        commands_tx.send(UciCommand::Quit)
+                            .expect("Error pushing UCI command to internal channel");
+                        break;
+                    }
+                };
+                if let Ok(cmd) = parse_command(&line) {
+                    log::debug!("Received command {:?}", cmd);
+                    commands_tx.send(cmd)
+                        .expect("Error pushing UCI command to internal channel")
+                }
+            }
         }
-        EngineMessage::Info(i) => format_info_message(i),
-        EngineMessage::Option(o) => format_option_message(o),
     }
 }
 
@@ -768,35 +863,32 @@ mod tests {
 
     #[test]
     fn test_parse_uci() {
-        assert_eq!(parse_command("uci"), Ok(EngineCommand::Uci));
+        assert_eq!(parse_command("uci"), Ok(UciCommand::Uci));
     }
 
     #[test]
     fn test_parse_debug() {
-        assert_eq!(parse_command("debug true"), Ok(EngineCommand::Debug(true)));
-        assert_eq!(
-            parse_command("debug false"),
-            Ok(EngineCommand::Debug(false))
-        );
+        assert_eq!(parse_command("debug true"), Ok(UciCommand::Debug(true)));
+        assert_eq!(parse_command("debug false"), Ok(UciCommand::Debug(false)));
     }
 
     #[test]
     fn test_parse_isready() {
-        assert_eq!(parse_command("isready"), Ok(EngineCommand::IsReady));
+        assert_eq!(parse_command("isready"), Ok(UciCommand::IsReady));
     }
 
     #[test]
     fn test_parse_setoption() {
         assert_eq!(
             parse_command("setoption name foo"),
-            Ok(EngineCommand::SetOption {
+            Ok(UciCommand::SetOption {
                 option_name: "foo".to_string(),
                 value: None,
             })
         );
         assert_eq!(
             parse_command("setoption name foo value 123"),
-            Ok(EngineCommand::SetOption {
+            Ok(UciCommand::SetOption {
                 option_name: "foo".to_string(),
                 value: Some("123".to_string()),
             })
@@ -807,21 +899,21 @@ mod tests {
     fn test_parse_register() {
         assert_eq!(
             parse_command("register later"),
-            Ok(EngineCommand::Register {
+            Ok(UciCommand::Register {
                 name: None,
                 code: None,
             })
         );
         assert_eq!(
             parse_command("register name joerob"),
-            Ok(EngineCommand::Register {
+            Ok(UciCommand::Register {
                 name: Some("joerob".to_string()),
                 code: None,
             })
         );
         assert_eq!(
             parse_command("register code asdf"),
-            Ok(EngineCommand::Register {
+            Ok(UciCommand::Register {
                 name: None,
                 code: Some("asdf".to_string()),
             })
@@ -830,14 +922,14 @@ mod tests {
 
     #[test]
     fn test_parse_ucinewgame() {
-        assert_eq!(parse_command("ucinewgame"), Ok(EngineCommand::UciNewGame));
+        assert_eq!(parse_command("ucinewgame"), Ok(UciCommand::UciNewGame));
     }
 
     #[test]
     fn test_parse_position() {
         assert_eq!(
             parse_command("position startpos"),
-            Ok(EngineCommand::Position {
+            Ok(UciCommand::Position {
                 position: Position::StartPos,
                 moves: Vec::new(),
             })
@@ -846,7 +938,7 @@ mod tests {
         let example_fen = "7k/2P5/3p4/7r/K7/8/8/8 w - - 0 1".to_string();
         assert_eq!(
             parse_command(&format!("position fen {}", &example_fen)),
-            Ok(EngineCommand::Position {
+            Ok(UciCommand::Position {
                 position: Position::FenString(example_fen.clone()),
                 moves: Vec::new(),
             })
@@ -854,7 +946,7 @@ mod tests {
 
         assert_eq!(
             parse_command("position startpos moves a2a3 g7g5"),
-            Ok(EngineCommand::Position {
+            Ok(UciCommand::Position {
                 position: Position::StartPos,
                 moves: vec![
                     Move::from_long_algebraic("a2a3").unwrap(),
@@ -865,7 +957,7 @@ mod tests {
 
         assert_eq!(
             parse_command(&format!("position fen {} moves c7c8q g8g7", &example_fen)),
-            Ok(EngineCommand::Position {
+            Ok(UciCommand::Position {
                 position: Position::FenString(example_fen.clone()),
                 moves: vec![
                     Move::from_long_algebraic("c7c8q").unwrap(),
@@ -879,7 +971,7 @@ mod tests {
     fn test_parse_go() {
         assert_eq!(
             parse_command("go ponder"),
-            Ok(EngineCommand::Go(GoCommand {
+            Ok(UciCommand::Go(GoCommand {
                 ponder: true,
                 ..GoCommand::default()
             }))
@@ -887,7 +979,7 @@ mod tests {
 
         assert_eq!(
             parse_command("go infinite"),
-            Ok(EngineCommand::Go(GoCommand {
+            Ok(UciCommand::Go(GoCommand {
                 infinite: true,
                 ..GoCommand::default()
             }))
@@ -895,7 +987,7 @@ mod tests {
 
         assert_eq!(
             parse_command("go searchmoves a2a4 movetime 1500"),
-            Ok(EngineCommand::Go(GoCommand {
+            Ok(UciCommand::Go(GoCommand {
                 move_time: Some(Duration::from_millis(1500)),
                 search_moves: Some(vec![Move::from_long_algebraic("a2a4").unwrap(),]),
                 ..GoCommand::default()
@@ -904,7 +996,7 @@ mod tests {
 
         assert_eq!(
             parse_command("go movestogo 10"),
-            Ok(EngineCommand::Go(GoCommand {
+            Ok(UciCommand::Go(GoCommand {
                 moves_to_go: Some(10),
                 ..GoCommand::default()
             }))
@@ -913,16 +1005,16 @@ mod tests {
 
     #[test]
     fn test_parse_stop() {
-        assert_eq!(parse_command("stop"), Ok(EngineCommand::Stop));
+        assert_eq!(parse_command("stop"), Ok(UciCommand::Stop));
     }
 
     #[test]
     fn test_parse_ponderhit() {
-        assert_eq!(parse_command("ponderhit"), Ok(EngineCommand::PonderHit));
+        assert_eq!(parse_command("ponderhit"), Ok(UciCommand::PonderHit));
     }
 
     #[test]
     fn test_parse_quit() {
-        assert_eq!(parse_command("quit"), Ok(EngineCommand::Quit));
+        assert_eq!(parse_command("quit"), Ok(UciCommand::Quit));
     }
 }

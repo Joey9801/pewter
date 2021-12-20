@@ -2,6 +2,8 @@ pub mod bmi;
 pub mod legal;
 pub mod pseudo_legal;
 
+pub use legal::legal_moves;
+
 pub fn perft(state: crate::State, depth: u8) -> usize {
     match depth {
         0 => 1,

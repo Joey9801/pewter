@@ -1,6 +1,6 @@
 use crate::{BitBoard, BoardPos, Color, Piece};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Board {
     piece_boards: [BitBoard; Piece::VARIANT_COUNT],
     color_boards: [BitBoard; Color::VARIANT_COUNT],

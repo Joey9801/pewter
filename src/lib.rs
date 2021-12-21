@@ -16,6 +16,7 @@ pub mod io;
 pub mod movegen;
 pub mod piece;
 pub mod state;
+pub mod zobrist;
 
 pub use crate::bitboard::BitBoard;
 pub use crate::board::Board;

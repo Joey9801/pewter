@@ -3,6 +3,8 @@ use bitflags::bitflags;
 use crate::bitboard::masks;
 use crate::coordinates::consts::*;
 use crate::{BitBoard, Board, BoardPos, Color, File, Move, Piece, Rank};
+use crate::movegen::pseudo_legal::{knight_moves, pawn_attacks};
+use crate::zobrist;
 
 pub enum CastleSide {
     Kingside,
@@ -52,6 +54,7 @@ pub struct State {
     pub board: Board,
     pub pinned: BitBoard,
     pub checkers: BitBoard,
+    pub zobrist: u64,
 }
 
 impl State {
@@ -65,6 +68,7 @@ impl State {
             board: Board::new_empty(),
             pinned: BitBoard::new_empty(),
             checkers: BitBoard::new_empty(),
+            zobrist: 0,
         }
     }
 
@@ -124,8 +128,6 @@ impl State {
             }
         }
 
-        use crate::movegen::pseudo_legal::{knight_moves, pawn_attacks};
-
         for pawn in self
             .board
             .color_piece_board(opp_color, Piece::Pawn)
@@ -183,6 +185,8 @@ impl State {
 
         let op = BitBoard::single(from).union_with(BitBoard::single(to));
         self.board.xor_inplace(self.to_play, Piece::Rook, op);
+        self.zobrist ^= zobrist::piece_number(self.to_play, Piece::Rook, from);
+        self.zobrist ^= zobrist::piece_number(self.to_play, Piece::Rook, to);
     }
 
     fn update_castling_rights(&mut self, m: Move, piece: Piece, capture_piece: Option<Piece>) {
@@ -277,6 +281,8 @@ impl State {
             .get(m.from)
             .expect("No piece on square being moved");
         debug_assert_eq!(_color, our_color);
+        next_state.zobrist ^= zobrist::piece_number(self.to_play, piece, m.from);
+        next_state.zobrist ^= zobrist::piece_number(self.to_play, piece, m.to);
 
         let capture_piece = next_state.board.get(m.to).map(|(c, p)| {
             debug_assert_eq!(c, opp_color);
@@ -289,6 +295,7 @@ impl State {
             next_state
                 .board
                 .xor_inplace(opp_color, capture_piece, to_bb);
+            next_state.zobrist ^= zobrist::piece_number(!self.to_play, capture_piece, m.to);
         }
 
         // let op = BitBoard::single(m.from).union_with(BitBoard::single(m.to));
@@ -308,6 +315,9 @@ impl State {
             next_state.apply_castling(m);
         }
         next_state.update_castling_rights(m, piece, capture_piece);
+        next_state.zobrist ^= zobrist::castling_number(self.castle_rights);
+        next_state.zobrist ^= zobrist::castling_number(next_state.castle_rights);
+
 
         // Update the en-passant capturable state
         if (piece == Piece::Pawn) && (move_bb & masks::double_pawn_moves(our_color) == move_bb) {
@@ -319,6 +329,8 @@ impl State {
         } else {
             next_state.en_passant = None;
         }
+        next_state.zobrist ^= zobrist::ep_number(self.en_passant);
+        next_state.zobrist ^= zobrist::ep_number(next_state.en_passant);
 
         if let Some(promotion) = m.promotion {
             debug_assert_eq!(piece, Piece::Pawn);
@@ -336,8 +348,10 @@ impl State {
         if next_state.to_play == Color::Black {
             next_state.fullmove_counter += 1;
         }
-        next_state.to_play = !next_state.to_play;
 
+        next_state.zobrist ^= zobrist::consts::ZOBRIST_WHITE_TURN;
+        next_state.to_play = !next_state.to_play;
+        
         next_state.recompute_pins_and_checks();
         next_state
     }

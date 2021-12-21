@@ -147,6 +147,8 @@ pub fn parse_fen(fen_str: &str) -> Result<State, FenParseError> {
         .parse()
         .map_err(|_| FenParseError::InvalidNumber)?;
 
+    state.zobrist = crate::zobrist::calculate_entire_zobrist(&state);
+
     if fields.next().is_some() {
         Err(FenParseError::ExcessFields)
     } else {

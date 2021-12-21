@@ -13,13 +13,17 @@ chrono = "0.4.19"
 crossbeam-channel = "0.5.1"
 fern = "0.6.0"
 log = "0.4.14"
-rand = "0.8.4"
+rand = { version = "0.8.4", features = ["small_rng"] }
 thiserror = "1.0.30"
 variant_count = "1.1.0"
 
 [dev-dependencies]
 proptest = "1.0.0"
 criterion = "0.3" 
+
+[build-dependencies]
+rand = { version = "0.8.4", features = ["small_rng"] }
+anyhow = "1.0.51"
 
 [[bench]]
 name = "bench"

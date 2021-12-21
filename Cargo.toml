@@ -22,5 +22,5 @@ proptest = "1.0.0"
 criterion = "0.3" 
 
 [[bench]]
-name = "movegen_bench"
+name = "bench"
 harness = false

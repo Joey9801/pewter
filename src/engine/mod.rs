@@ -82,6 +82,7 @@ pub struct SearchControls {
     pub perf_info: Option<Sender<PerfInfo>>,
 }
 
+#[derive(Clone)]
 pub struct Engine {
     board_state: Option<State>,
 }

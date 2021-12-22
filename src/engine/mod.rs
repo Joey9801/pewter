@@ -76,10 +76,10 @@ impl<T> From<SendError<T>> for EngineError {
 #[derive(Clone, Debug)]
 pub struct SearchControls {
     /// Periodically ready by every search thread. The search will be terminated when this is true.
-    stop: Arc<AtomicBool>,
+    pub stop: Arc<AtomicBool>,
 
     /// Outlet for periodic performance events during the search.
-    perf_info: Option<Sender<PerfInfo>>,
+    pub perf_info: Option<Sender<PerfInfo>>,
 }
 
 pub struct Engine {
@@ -87,7 +87,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self { board_state: None }
     }
 
@@ -97,10 +97,10 @@ impl Engine {
 
     pub fn search_best_move(
         &mut self,
-        infinite: bool,
+        _infinite: bool,
         max_depth: Option<u8>,
-        max_nodes: Option<u64>,
-        timings: Option<Timings>,
+        _max_nodes: Option<u64>,
+        _timings: Option<Timings>,
         controls: SearchControls,
     ) -> Result<Move, EngineError> {
         let start_time = Instant::now();

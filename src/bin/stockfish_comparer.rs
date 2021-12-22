@@ -1,10 +1,14 @@
 use std::io::Write;
+use std::path::PathBuf;
 use std::{
     collections::HashSet,
     io::{BufRead, BufReader},
     path::Path,
     process::{Child, Command, Stdio},
 };
+
+use anyhow::{Result, Context};
+use clap::Parser;
 
 use pewter::{
     io::fen::{format_fen, parse_fen},
@@ -34,12 +38,12 @@ struct StockfishInterface {
 }
 
 impl StockfishInterface {
-    fn launch(exe: &Path) -> Self {
+    fn launch(exe: &Path) -> Result<Self> {
         let mut child = Command::new(exe)
             .stdout(Stdio::piped())
             .stdin(Stdio::piped())
             .spawn()
-            .expect("Failed to launch stockfish subprocess");
+            .with_context(|| "Failed to start Stockfish subprocess".to_string())?;
 
         // Consume the init line that stockfish emits on startup
         let stdout = child
@@ -49,9 +53,9 @@ impl StockfishInterface {
         let mut stdout = BufReader::new(stdout);
 
         let mut line = String::new();
-        stdout.read_line(&mut line).unwrap();
+        stdout.read_line(&mut line)?;
 
-        Self { child }
+        Ok(Self { child })
     }
 
     fn set_state(&mut self, state: State) {
@@ -185,28 +189,24 @@ fn find_minimal_difference(
     }
 }
 
-fn main() {
-    let mut args = std::env::args();
+/// Compare Pewter's move generation against stockfish
+#[derive(Parser, Debug)]
+#[clap(about, version, author, name="stockfish_comparer")]
+struct Args {
+    /// Path to a stockfish executable to compare pewter against
+    #[clap(long)]
+    sf_exe: PathBuf,
 
-    // First element in args is just our own exe path
-    args.next();
+    /// FEN string to start the comparison from
+    #[clap(long)]
+    fen: String,
+}
 
-    let stockfish_exe = args
-        .next()
-        .expect("Expected second argument to be the path to a stockfish exe");
+fn main() -> Result<()> {
+    let args = Args::parse();
 
-    let stockfish_exe = Path::new(&stockfish_exe);
-    if !stockfish_exe.exists() {
-        println!("Cannot find given stockfish executable");
-        return;
-    }
-    let sf = StockfishInterface::launch(stockfish_exe);
-
-    let fen_str = args
-        .next()
-        .expect("Expected first argument to be a starting FEN string");
-    let initial_state =
-        parse_fen(&fen_str).expect("Expected a valid FEN string for the first argument");
+    let sf = StockfishInterface::launch(&args.sf_exe)?;
+    let initial_state = parse_fen(&args.fen)?;
 
     if let Some(diff) = find_minimal_difference(initial_state, sf, 10) {
         println!("At the following position:");
@@ -229,4 +229,6 @@ fn main() {
         println!("Checkers:");
         println!("{}", diff.position.checkers.pretty_format());
     }
+    
+    Ok(())
 }

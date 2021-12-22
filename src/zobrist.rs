@@ -40,7 +40,7 @@ pub fn calculate_entire_zobrist(state: &State) -> u64 {
     zobrist_num ^= to_play_num(state.to_play);
 
     for color in [Color::White, Color::Black] {
-        for piece in Piece::iter_all() {
+        for piece in Piece::all() {
             let cp_board = state.board.color_piece_board(color, piece);
             for pos in cp_board.iter_set() {
                 zobrist_num ^= piece_number(color, piece, pos);

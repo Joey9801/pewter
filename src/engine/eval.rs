@@ -24,13 +24,14 @@ pub mod consts {
 
 /// The linear difference in material, in centipawns, from white's perspective.
 pub fn material_diff(state: &State) -> i32 {
-    Piece::iter_all()
+    Piece::all()
         .map(|p| {
             let value = consts::piece_value(p);
             let wb = state.board.color_piece_board(Color::White, p);
             let bb = state.board.color_piece_board(Color::Black, p);
             (wb.count() as i32 - bb.count() as i32) * value
         })
+        .iter()
         .sum()
 }
 

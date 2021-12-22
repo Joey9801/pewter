@@ -45,7 +45,7 @@ impl Piece {
         }
     }
 
-    pub fn iter_all() -> impl Iterator<Item = Self> {
+    pub const fn all() -> [Self; Self::VARIANT_COUNT] {
         [
             Piece::Pawn,
             Piece::Rook,
@@ -54,7 +54,5 @@ impl Piece {
             Piece::King,
             Piece::Queen,
         ]
-        .iter()
-        .cloned()
     }
 }

@@ -5,7 +5,7 @@ use crate::{
 pub fn all_pseudo_legal(state: &State) -> MoveSet {
     let mut ms = MoveSet::new_empty();
 
-    for piece in Piece::iter_all() {
+    for piece in Piece::all() {
         for pos in state
             .board
             .color_piece_board(state.to_play, piece)

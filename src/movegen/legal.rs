@@ -13,7 +13,7 @@ pub fn legal_moves(state: &State) -> MoveSet {
     // With zero opposing pieces giving check, it is possible for pinned pieces to move along their
     // pinned line.
     if checker_count == 0 {
-        for piece in Piece::iter_all() {
+        for piece in Piece::all() {
             let pinned_pieces = state.board.piece_board(piece).intersect_with(state.pinned);
 
             for pos in pinned_pieces.iter_set() {
@@ -39,7 +39,7 @@ pub fn legal_moves(state: &State) -> MoveSet {
             .color_board(state.to_play)
             .intersect_with(!state.pinned);
 
-        for piece in Piece::iter_all() {
+        for piece in Piece::all() {
             let non_pinned_pieces = state
                 .board
                 .piece_board(piece)

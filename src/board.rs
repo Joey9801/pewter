@@ -117,8 +117,8 @@ impl Board {
 
     pub fn sanity_check_board(&self) {
         // The individual piece boards should not overlap
-        for a in Piece::iter_all() {
-            for b in Piece::iter_all() {
+        for a in Piece::all() {
+            for b in Piece::all() {
                 if a != b {
                     let a_board = self.piece_board(a);
                     let b_board = self.piece_board(b);
@@ -135,7 +135,7 @@ impl Board {
         // The union of all the color boards should equal the union of all the piece boards
         let color_union = white_board.union_with(black_board);
         let mut piece_union = BitBoard::new_empty();
-        for piece in Piece::iter_all() {
+        for piece in Piece::all() {
             piece_union = piece_union.union_with(self.piece_board(piece));
         }
 

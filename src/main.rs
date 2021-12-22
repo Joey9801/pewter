@@ -3,7 +3,9 @@ use std::time::Duration;
 use anyhow::Result;
 use crossbeam_channel::{select, Sender};
 
-use pewter::engine::{Engine, EngineCommand, EngineMessage};
+use pewter::Move;
+use pewter::engine::engine_server::EngineServer;
+use pewter::engine::PerfInfo;
 use pewter::io::uci::*;
 
 #[derive(Clone, Debug, Default)]
@@ -57,32 +59,39 @@ fn main() -> Result<()> {
         .apply()?;
 
     let uci = UciInterface::<Options>::startup()?;
-    let (engine_tx, engine_rx) = Engine::startup()?;
+    let mut engine = EngineServer::startup()?;
 
     loop {
         select! {
-            recv(uci.rx) -> uci_msg => if handle_uci_cmd(uci_msg?, &uci.tx, &engine_tx)? {
+            recv(uci.rx) -> uci_msg => if handle_uci_cmd(uci_msg?, &uci.tx, &mut engine)? {
                 break Ok(());
             },
-            recv(engine_rx) -> engine_msg => handle_engine_msg(engine_msg?, &uci.tx)?,
+            recv(engine.perf_rx) -> perf => handle_engine_perf(perf?, &uci.tx)?,
+            recv(engine.best_move_rx) -> m => handle_engine_best_move(m?, &uci.tx)?,
         }
     }
 }
 
-
-fn handle_uci_cmd(msg: UciCommand, uci_tx: &Sender<UciMessage>, engine_tx: &Sender<EngineCommand>) -> Result<bool> {
+fn handle_uci_cmd(
+    msg: UciCommand,
+    uci_tx: &Sender<UciMessage>,
+    engine: &mut EngineServer
+) -> Result<bool> {
     match msg {
-        UciCommand::Uci => uci_tx.send(UciMessage::UciOk)?,
+        UciCommand::Uci => {
+            uci_tx.send(UciMessage::UciOk)?;
+            uci_tx.send(UciMessage::Id(EngineId::Name("pewter".to_string())))?;
+            uci_tx.send(UciMessage::Id(EngineId::Author("Joe Roberts".to_string())))?;
+        }
         UciCommand::IsReady => uci_tx.send(UciMessage::ReadyOk)?,
         UciCommand::Quit => {
             log::info!("Received quit command, shutting down");
             return Ok(true);
         }
         UciCommand::Position { position, moves } => {
+            // Parse the position, and resolve any moves passed in
             let fen = match &position {
-                Position::StartPos => {
-                    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-                }
+                Position::StartPos => "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
                 Position::FenString(s) => s,
             };
             let mut state = pewter::io::fen::parse_fen(fen)?;
@@ -90,8 +99,11 @@ fn handle_uci_cmd(msg: UciCommand, uci_tx: &Sender<UciMessage>, engine_tx: &Send
                 state = state.apply_move(m);
             }
 
-            log::info!("Setting position to \"{}\"", pewter::io::fen::format_fen(&state));
-            engine_tx.send(EngineCommand::SetState(state))?;
+            log::info!(
+                "Setting position to \"{}\"",
+                pewter::io::fen::format_fen(&state)
+            );
+            engine.set_state(state)?;
         }
         UciCommand::Go(go) => {
             let timings = pewter::engine::Timings {
@@ -101,39 +113,36 @@ fn handle_uci_cmd(msg: UciCommand, uci_tx: &Sender<UciMessage>, engine_tx: &Send
                 black_increment: go.black_increment.unwrap_or(Duration::ZERO),
             };
             
-            engine_tx.send(EngineCommand::UpdateTimings(timings))?;
-            
-            let infinite = go.infinite;
-            let max_depth = go.depth.map(|x| x as u8);
-            let max_nodes = go.nodes;
-            engine_tx.send(EngineCommand::BeginSearch {
-                infinite, max_depth, max_nodes
-            })?;
+            engine.begin_search(
+                go.infinite,
+                go.depth,
+                go.nodes,
+                Some(timings)
+            )?;
         }
+        UciCommand::Stop => engine.stop_search()?,
         _ => (),
     }
-    
+
     Ok(false)
 }
 
-fn handle_engine_msg(msg: EngineMessage, uci_tx: &Sender<UciMessage>) -> Result<()> {
-    match msg {
-        EngineMessage::PerfInfo {
-            transposition_load,
-            nodes,
-            nodes_per_second: _,
-            table_hits: _,
-            shredder_hits: _
-        } => uci_tx.send(UciMessage::Info(InfoMessage {
-            nodes: Some(nodes),
-            hash_full: Some((transposition_load * 100_000f32) as u16),
-            ..InfoMessage::default()
-        }))?,
-        EngineMessage::BestMove { best_move, ponder_move } => uci_tx.send(
-            UciMessage::BestMove { best_move, ponder_move }
-        )?,
-        EngineMessage::Error(e) => log::warn!("{}", e),
-    }
-    
+fn handle_engine_perf(msg: PerfInfo, uci_tx: &Sender<UciMessage>) -> Result<()> {
+    uci_tx.send(UciMessage::Info(InfoMessage {
+        nodes: Some(msg.nodes),
+        nodes_per_second: Some(msg.nodes_per_second as u64),
+        hash_full: Some((msg.transposition_load * 100_000f32) as u16),
+        ..InfoMessage::default()
+    }))?;
+
+    Ok(())
+}
+
+fn handle_engine_best_move(best_move: Move, uci_tx: &Sender<UciMessage>) -> Result<()> {
+    uci_tx.send(UciMessage::BestMove {
+        best_move,
+        ponder_move: None,
+    })?;
+
     Ok(())
 }

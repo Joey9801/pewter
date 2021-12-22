@@ -52,13 +52,13 @@ pub fn apply_move(c: &mut Criterion) {
 pub fn generate_legal_moves(c: &mut Criterion) {
     let positions = &[
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        "r2q1rk1/pp1nppbp/2pp1np1/8/2PPPB2/2N2B1P/PP3PP1/R2Q1RK1 w - - 3 11"
+        "r2q1rk1/pp1nppbp/2pp1np1/8/2PPPB2/2N2B1P/PP3PP1/R2Q1RK1 w - - 3 11",
     ];
 
     let mut group = c.benchmark_group("movegen::legal_moves");
     for pos in positions {
-        let state = parse_fen(pos)
-            .expect("Expected benchmark definition to have a valid FEN string");
+        let state =
+            parse_fen(pos).expect("Expected benchmark definition to have a valid FEN string");
 
         group.bench_function(*pos, |b| {
             b.iter(|| black_box(pewter::movegen::legal_moves(black_box(&state))));

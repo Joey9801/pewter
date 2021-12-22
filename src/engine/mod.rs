@@ -1,4 +1,10 @@
-use std::{time::{Duration, Instant}, sync::{atomic::{AtomicBool, Ordering}, Arc}};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::{Duration, Instant},
+};
 
 use crate::{movegen::legal_moves, Move, State};
 
@@ -27,8 +33,9 @@ pub struct Timings {
     pub black_increment: Duration,
 }
 
-#[derive(Clone, Debug)] /// Assorted information about the recent mechanical performance of the engine
-pub struct PerfInfo{
+#[derive(Clone, Debug)]
+/// Assorted information about the recent mechanical performance of the engine
+pub struct PerfInfo {
     /// Value between 0 and 1 representing how full the transposition table is
     pub transposition_load: f32,
 
@@ -70,7 +77,7 @@ impl<T> From<SendError<T>> for EngineError {
 pub struct SearchControls {
     /// Periodically ready by every search thread. The search will be terminated when this is true.
     stop: Arc<AtomicBool>,
-    
+
     /// Outlet for periodic performance events during the search.
     perf_info: Option<Sender<PerfInfo>>,
 }
@@ -81,11 +88,9 @@ pub struct Engine {
 
 impl Engine {
     fn new() -> Self {
-        Self {
-            board_state: None,
-        }
+        Self { board_state: None }
     }
-    
+
     pub fn set_board_state(&mut self, new_state: State) {
         self.board_state = Some(new_state);
     }
@@ -96,7 +101,7 @@ impl Engine {
         max_depth: Option<u8>,
         max_nodes: Option<u64>,
         timings: Option<Timings>,
-        controls: SearchControls
+        controls: SearchControls,
     ) -> Result<Move, EngineError> {
         let start_time = Instant::now();
         let mut last_perf_info = Instant::now();
@@ -123,12 +128,12 @@ impl Engine {
                 alpha = score;
                 best_move = Some(m);
             }
-            
+
             if controls.stop.load(Ordering::Relaxed) {
                 log::info!("Received stop signal, stopping search early");
                 break;
             }
-            
+
             if last_perf_info.elapsed().as_secs() >= 3 {
                 last_perf_info = Instant::now();
 
@@ -136,7 +141,8 @@ impl Engine {
                     perf_sender.send(PerfInfo {
                         transposition_load: 0.0,
                         nodes: nodes_searched,
-                        nodes_per_second: nodes_searched as f32 / start_time.elapsed().as_secs_f32(),
+                        nodes_per_second: nodes_searched as f32
+                            / start_time.elapsed().as_secs_f32(),
                         table_hits: 0,
                         shredder_hits: 0,
                     })?;

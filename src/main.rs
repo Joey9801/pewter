@@ -3,10 +3,10 @@ use std::time::Duration;
 use anyhow::Result;
 use crossbeam_channel::{select, Sender};
 
-use pewter::Move;
 use pewter::engine::engine_server::EngineServer;
 use pewter::engine::PerfInfo;
 use pewter::io::uci::*;
+use pewter::Move;
 
 #[derive(Clone, Debug, Default)]
 struct Options {
@@ -75,7 +75,7 @@ fn main() -> Result<()> {
 fn handle_uci_cmd(
     msg: UciCommand,
     uci_tx: &Sender<UciMessage>,
-    engine: &mut EngineServer
+    engine: &mut EngineServer,
 ) -> Result<bool> {
     match msg {
         UciCommand::Uci => {
@@ -112,13 +112,8 @@ fn handle_uci_cmd(
                 white_increment: go.white_increment.unwrap_or(Duration::ZERO),
                 black_increment: go.black_increment.unwrap_or(Duration::ZERO),
             };
-            
-            engine.begin_search(
-                go.infinite,
-                go.depth,
-                go.nodes,
-                Some(timings)
-            )?;
+
+            engine.begin_search(go.infinite, go.depth, go.nodes, Some(timings))?;
         }
         UciCommand::Stop => engine.stop_search()?,
         _ => (),

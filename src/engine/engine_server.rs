@@ -1,12 +1,14 @@
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use anyhow::Result;
-use crossbeam_channel::{Sender, unbounded, Receiver};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 
-use crate::{State, Move};
+use crate::{Move, State};
 
-use super::{Timings, PerfInfo, SearchControls};
-
+use super::{PerfInfo, SearchControls, Timings};
 
 #[derive(Clone, Copy, Debug)]
 struct BeginSearchArgs {
@@ -18,9 +20,9 @@ struct BeginSearchArgs {
 
     /// Automatically stop after searching this many nodes
     max_nodes: Option<u64>,
-    
+
     /// The most up-to-date time control information for this search
-    /// 
+    ///
     /// Completely ignored if an infinite search is requested
     timings: Option<Timings>,
 }
@@ -45,7 +47,7 @@ impl EngineServer {
         let (cmd_tx, cmd_rx) = unbounded();
         let (perf_tx, perf_rx) = unbounded();
         let (best_move_tx, best_move_rx) = unbounded();
-        
+
         let search_stopper = Arc::new(AtomicBool::new(false));
         let search_stopper_clone = search_stopper.clone();
 
@@ -60,7 +62,7 @@ impl EngineServer {
             search_stopper,
         })
     }
-    
+
     pub fn set_state(&mut self, new_state: State) -> Result<()> {
         self.cmd_tx.send(EngineCommand::SetState(new_state))?;
         Ok(())
@@ -81,12 +83,12 @@ impl EngineServer {
         };
 
         self.search_stopper.store(false, Ordering::Relaxed);
-        
+
         self.cmd_tx.send(EngineCommand::BeginSearch(args))?;
-        
+
         Ok(())
     }
-    
+
     pub fn stop_search(&mut self) -> Result<()> {
         self.search_stopper.store(true, Ordering::Relaxed);
         Ok(())
@@ -104,7 +106,7 @@ fn engine_main_thread(
     cmd_rx: Receiver<EngineCommand>,
     perf_tx: Sender<PerfInfo>,
     best_move_tx: Sender<Move>,
-    search_stopper: Arc<AtomicBool>
+    search_stopper: Arc<AtomicBool>,
 ) -> Result<()> {
     let mut engine = super::Engine::new();
 
@@ -122,11 +124,11 @@ fn engine_main_thread(
                     args.max_depth,
                     args.max_nodes,
                     args.timings,
-                    controls
+                    controls,
                 )?;
-                
+
                 best_move_tx.send(best_move)?;
-            },
+            }
             EngineCommand::Exit => break,
         }
     }

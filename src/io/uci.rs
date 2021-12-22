@@ -821,7 +821,8 @@ fn uci_interface_thread(messages_rx: Receiver<UciMessage>, commands_tx: Sender<U
                     .send(line)
                     .expect("Error pushing raw UCI command to internal channel");
             }
-        }).expect("Failed to start UCI reader thread");
+        })
+        .expect("Failed to start UCI reader thread");
 
     loop {
         select! {

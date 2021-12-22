@@ -38,7 +38,7 @@ pub fn calculate_entire_zobrist(state: &State) -> u64 {
 
     zobrist_num ^= castling_number(state.castle_rights);
     zobrist_num ^= to_play_num(state.to_play);
-    
+
     for color in [Color::White, Color::Black] {
         for piece in Piece::iter_all() {
             let cp_board = state.board.color_piece_board(color, piece);
@@ -47,10 +47,10 @@ pub fn calculate_entire_zobrist(state: &State) -> u64 {
             }
         }
     }
-    
+
     if let Some(ep) = state.en_passant {
         zobrist_num ^= consts::ZOBRIST_EP[ep.file.to_num() as usize];
     }
-    
+
     zobrist_num
 }

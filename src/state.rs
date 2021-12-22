@@ -2,9 +2,9 @@ use bitflags::bitflags;
 
 use crate::bitboard::masks;
 use crate::coordinates::consts::*;
-use crate::{BitBoard, Board, BoardPos, Color, File, Move, Piece, Rank};
 use crate::movegen::pseudo_legal::{knight_moves, pawn_attacks};
 use crate::zobrist;
+use crate::{BitBoard, Board, BoardPos, Color, File, Move, Piece, Rank};
 
 pub enum CastleSide {
     Kingside,
@@ -318,7 +318,6 @@ impl State {
         next_state.zobrist ^= zobrist::castling_number(self.castle_rights);
         next_state.zobrist ^= zobrist::castling_number(next_state.castle_rights);
 
-
         // Update the en-passant capturable state
         if (piece == Piece::Pawn) && (move_bb & masks::double_pawn_moves(our_color) == move_bb) {
             let rank = match next_state.to_play {
@@ -351,7 +350,7 @@ impl State {
 
         next_state.zobrist ^= zobrist::consts::ZOBRIST_WHITE_TURN;
         next_state.to_play = !next_state.to_play;
-        
+
         next_state.recompute_pins_and_checks();
         next_state
     }

@@ -199,6 +199,10 @@ impl MoveSet {
     pub fn iter(&self) -> impl Iterator<Item = Move> + '_ {
         self.chunks.iter().flat_map(|c| c.iter())
     }
+    
+    pub fn any(&self) -> bool {
+        self.chunks.iter().any(|c| c.any())
+    }
 }
 
 impl FromIterator<MoveSetChunk> for MoveSet {

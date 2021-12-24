@@ -15,6 +15,7 @@ use thiserror::Error;
 
 pub mod engine_server;
 pub mod eval;
+pub mod opening_db;
 
 pub use engine_server::EngineServer;
 

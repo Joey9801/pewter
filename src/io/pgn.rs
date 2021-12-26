@@ -21,6 +21,9 @@ pub enum PgnParseError {
     
     #[error("This PGN parser does not have the ability to parse PGN files that contain comments")]
     Comments,
+
+    #[error("There were non-ascii characters in the PGN file")]
+    NonAscii,
 }
 
 fn parse_san_move(state: &State, move_str: &str) -> Result<Move, PgnParseError> {
@@ -153,6 +156,10 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
     //   - All games being parsed start from the normal starting position
     //   - There are no comments (';', '{', or '}' chars)
 
+    if !pgn_str.is_ascii() {
+        return Err(PgnParseError::NonAscii);
+    }
+
     let starting = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     let mut state = parse_fen(starting).unwrap();
     let initial_state = state.clone();
@@ -177,7 +184,19 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
             }
 
             let token = strip_move_number(token);
-            let m = parse_san_move(&state, token)?;
+            let m = match parse_san_move(&state, token) {
+                Ok(m) => m,
+                Err(PgnParseError::BadMoveString) => {
+                    match token {
+                        "1-0" | "1-" | "1" => result = GameResult::WhiteWin,
+                        "0-1" | "0-" | "0" => result = GameResult::BlackWin,
+                        "1/2-1/2" | "1/2-" | "1/2" => result = GameResult::Draw,
+                        _ => return Err(PgnParseError::BadMoveString),
+                    }
+                    break
+                },
+                Err(e) => return Err(e),
+            };
             state = state.apply_move(m);
             moves.push(m);
 
@@ -194,6 +213,52 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
         result,
     })
 }
+
+
+pub fn parse_multi_pgn(multi_pgn_str: &str) -> Result<Vec<Game>, PgnParseError> {
+    if !multi_pgn_str.is_ascii() {
+        return Err(PgnParseError::NonAscii);
+    }
+
+    let mut games = Vec::new();
+
+    let mut this_pgn_start = 0;
+    let mut this_pgn_end = 0;
+    let mut in_tags = false;
+    let mut line_start = 0;
+
+    while line_start < multi_pgn_str.len() {
+        let line_end = match multi_pgn_str[line_start..].find('\n') {
+            Some(idx) => idx + line_start,
+            None => multi_pgn_str.len() - 1,
+        };
+        let line = &multi_pgn_str[line_start..(line_end + 1)];
+
+        if line.as_bytes()[0] == b'[' {
+            if !in_tags {
+                let last_pgn = &multi_pgn_str[this_pgn_start..this_pgn_end];
+                if last_pgn.len() > 0 {
+                    games.push(parse_single_pgn(last_pgn)?);
+                }
+                in_tags = true;
+                this_pgn_start = line_start;
+            }
+        } else {
+            in_tags = false;
+        }
+
+        this_pgn_end = line_end;
+        line_start = line_end + 1;
+    }
+
+    let last_pgn = &multi_pgn_str[this_pgn_start..];
+    if last_pgn.len() > 0 {
+        games.push(parse_single_pgn(last_pgn)?);
+    }
+
+    Ok(games)
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -227,5 +292,89 @@ mod tests {
             
             state = state.apply_move(m);
         }
+    }
+
+    const EXAMPLE_PGN: &'static str = r#"[Event "Superbet Classic 2021"]
+[Site "Bucharest ROU"]
+[Date "2021.06.05"]
+[Round "1.5"]
+[White "Deac,Bogdan-Daniel"]
+[Black "Giri,A"]
+[Result "1/2-1/2"]
+[WhiteElo "2627"]
+[BlackElo "2780"]
+[ECO "D43"]
+
+1.d4 d5 2.c4 c6 3.Nc3 Nf6 4.Nf3 e6 5.Bg5 h6 6.Bh4 dxc4 7.e4 g5 8.Bg3 b5 9.Be2 Bb7
+10.Qc2 Nh5 11.Rd1 Nxg3 12.hxg3 Na6 13.a3 Bg7 14.e5 Qe7 15.Ne4 O-O-O 16.Nd6+ Rxd6
+17.exd6 Qxd6 18.O-O g4 19.Ne5 Bxe5 20.dxe5 Qxe5 21.Bxg4 h5 22.Rfe1 Qf6 23.Bf3 h4
+24.b3 cxb3 25.Qxb3 hxg3 26.fxg3 Qg7 27.Qd3 Nc7 28.Qd6 c5 29.Qd7+ Kb8 30.Bxb7 Kxb7
+31.Rxe6 Qxg3 32.Qc6+ Kb8 33.Qd6 Qxd6 34.Rexd6 Kb7 35.Rf6 Rh7 36.Rd7 b4 37.axb4 cxb4
+38.Kf2 a5 39.Ke2 Rg7 40.Rfxf7 Rxg2+ 41.Kd1 Rg1+ 42.Kc2 Rg2+ 43.Kb1 Rg1+ 44.Kb2 Rg2+
+45.Kb1 Rg1+ 46.Kb2 Rg2+ 47.Kb1 Rg1+  1/2-1/2"#;
+
+    #[test]
+    fn test_parse_single_pgn() {
+        let game = parse_single_pgn(EXAMPLE_PGN)
+            .expect("Expected EXAMPLE_PGN to parse successfully");
+
+        assert_eq!(game.moves.len(), 94);
+        assert_eq!(game.moves[0].format_long_algebraic(), "d2d4");
+        assert_eq!(game.moves[93].format_long_algebraic(), "g2g1");
+    }
+
+    const EXAMPLE_MULTI_PGN: &'static str = r#"[Event "Superbet Classic 2021"]
+[Site "Bucharest ROU"]
+[Date "2021.06.05"]
+[Round "1.5"]
+[White "Deac,Bogdan-Daniel"]
+[Black "Giri,A"]
+[Result "1/2-1/2"]
+[WhiteElo "2627"]
+[BlackElo "2780"]
+[ECO "D43"]
+
+1.d4 d5 2.c4 c6 3.Nc3 Nf6 4.Nf3 e6 5.Bg5 h6 6.Bh4 dxc4 7.e4 g5 8.Bg3 b5 9.Be2 Bb7
+10.Qc2 Nh5 11.Rd1 Nxg3 12.hxg3 Na6 13.a3 Bg7 14.e5 Qe7 15.Ne4 O-O-O 16.Nd6+ Rxd6
+17.exd6 Qxd6 18.O-O g4 19.Ne5 Bxe5 20.dxe5 Qxe5 21.Bxg4 h5 22.Rfe1 Qf6 23.Bf3 h4
+24.b3 cxb3 25.Qxb3 hxg3 26.fxg3 Qg7 27.Qd3 Nc7 28.Qd6 c5 29.Qd7+ Kb8 30.Bxb7 Kxb7
+31.Rxe6 Qxg3 32.Qc6+ Kb8 33.Qd6 Qxd6 34.Rexd6 Kb7 35.Rf6 Rh7 36.Rd7 b4 37.axb4 cxb4
+38.Kf2 a5 39.Ke2 Rg7 40.Rfxf7 Rxg2+ 41.Kd1 Rg1+ 42.Kc2 Rg2+ 43.Kb1 Rg1+ 44.Kb2 Rg2+
+45.Kb1 0-1
+
+[Event "Superbet Classic 2021"]
+[Site "Bucharest ROU"]
+[Date "2021.06.07"]
+[Round "3.5"]
+[White "Lupulescu,C"]
+[Black "Giri,A"]
+[Result "1-0"]
+[WhiteElo "2656"]
+[BlackElo "2780"]
+[ECO "A28"]
+
+1.c4 e5 2.Nc3 Nf6 3.Nf3 Nc6 4.e3 Bb4 5.Qc2 Bxc3 6.Qxc3 Qe7 7.d4 Ne4 8.Qd3 exd4
+9.Nxd4 Nc5 10.Qd1 Nxd4 11.Qxd4 O-O 12.Be2 b6 13.O-O Bb7 14.f3 a5 15.Bd2 f5
+16.Rad1 d6 17.b3 Rae8 18.Rf2 Rf6 19.Bd3 Qf7 20.Re2 Qh5 21.Be1 Be4 22.Bb1 Rg6
+23.Bg3 Bxb1 24.Rxb1 Ne4 25.Rbe1 Nxg3 26.Qd5+ Kh8 27.hxg3 Rxg3 28.e4 Qxf3
+29.Qf7 Rg8 30.exf5 Qc6 31.Rf2 Qc5 32.Re7 Qd4 33.Re8 Rxg2+ 34.Kxg2 Qg4+ 35.Kh2 Qh4+
+36.Kg2 Qg4+ 37.Kf1 Qh3+ 38.Ke1 Qc3+ 39.Rd2  1-0"#;
+
+    #[test]
+    fn test_parse_multi_pgn() {
+        let games = parse_multi_pgn(EXAMPLE_MULTI_PGN)
+            .expect("Expected EXAMPLE_MULTI_PGN to parse successfully");
+
+        assert_eq!(games.len(), 2);
+
+        assert_eq!(games[0].moves.len(), 89);
+        assert_eq!(games[0].result, GameResult::BlackWin);
+        assert_eq!(games[0].moves[0].format_long_algebraic(), "d2d4");
+        assert_eq!(games[0].moves[88].format_long_algebraic(), "b2b1");
+
+        assert_eq!(games[1].moves.len(), 77);
+        assert_eq!(games[1].result, GameResult::WhiteWin);
+        assert_eq!(games[1].moves[0].format_long_algebraic(), "c2c4");
+        assert_eq!(games[1].moves[76].format_long_algebraic(), "f2d2");
     }
 }

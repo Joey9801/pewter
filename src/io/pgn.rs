@@ -179,11 +179,12 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
         }
         
         for token in line.split_ascii_whitespace() {
+            let token = strip_move_number(token);
+
             if token.len() == 0 {
                 continue;
             }
 
-            let token = strip_move_number(token);
             let m = match parse_san_move(&state, token) {
                 Ok(m) => m,
                 Err(PgnParseError::BadMoveString) => {

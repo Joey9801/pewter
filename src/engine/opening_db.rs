@@ -1,9 +1,11 @@
 use std::{collections::HashMap};
 
-use crate::{Move, State, state::GameResult, Color};
+use crate::{Move, State, state::GameResult, Color, io::pgn::Game};
 
+#[derive(Debug, Clone)]
 pub struct OpeningDb(HashMap<u64, Vec<DbResult>>);
 
+#[derive(Debug, Clone)]
 pub struct DbResult {
     /// The potential move 
     pub m: Move,
@@ -29,21 +31,21 @@ impl OpeningDb {
         Self(HashMap::new())
     }
     
-    pub fn add_game(&mut self, game: crate::io::pgn::Game) {
+    pub fn add_game(&mut self, game: &Game) {
         let mut state = game.initial;
 
         // Be a little defensive
         state.zobrist = crate::zobrist::calculate_entire_zobrist(&state);
 
-        for m in game.moves {
+        for m in &game.moves {
             let existing_set = self.0.entry(state.zobrist)
                 .or_insert(Vec::new());
 
-            let result = match existing_set.iter().position(|r| r.m == m) {
+            let result = match existing_set.iter().position(|r| r.m == *m) {
                 Some(idx) => existing_set.get_mut(idx).unwrap(),
                 None => {
                     existing_set.push(DbResult {
-                        m,
+                        m: *m,
                         wins: 0,
                         draws: 0,
                         losses: 0
@@ -61,6 +63,8 @@ impl OpeningDb {
                 (_, GameResult::Draw) => result.draws += 1,
                 (_, GameResult::Ongoing) => panic!("Can't add an ongoing game to the opening DB"),
             }
+
+            state = state.apply_move(*m);
         }
     }
     

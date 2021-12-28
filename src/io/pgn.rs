@@ -42,6 +42,12 @@ fn parse_san_move(state: &State, move_str: &str) -> Result<Move, PgnParseError> 
         return Err(PgnParseError::BadMoveString);
     }
     
+    let dest_pos;
+    let mut capture = false;
+    let mut piece = None;
+    let mut from_file = None;
+    let mut from_rank = None;
+
     // Parse and strip the promotion detail off the end
     let promotion = match move_str[move_str.len() - 1] {
         b'Q' => Some(Piece::Queen),
@@ -55,17 +61,12 @@ fn parse_san_move(state: &State, move_str: &str) -> Result<Move, PgnParseError> 
             return Err(PgnParseError::BadMoveString);
         }
         move_str = &move_str[..(move_str.len() - 2)];
+        piece = Some(Piece::Pawn);
     }
 
     if move_str.len() < 2 {
         return Err(PgnParseError::BadMoveString);
     }
-    
-    let dest_pos;
-    let mut capture = false;
-    let mut piece = None;
-    let mut from_file = None;
-    let mut from_rank = None;
 
     if move_str == b"O-O" || move_str == b"O-O-O" {
         // castling move
@@ -118,7 +119,8 @@ fn parse_san_move(state: &State, move_str: &str) -> Result<Move, PgnParseError> 
         .filter(|m| m.to == dest_pos)
         .filter(|m| state.board.get(m.from) == Some((state.to_play, piece)))
         .filter(|m| from_file.map(|f| m.from.file == f).unwrap_or(true))
-        .filter(|m| from_rank.map(|r| m.from.rank == r).unwrap_or(true));
+        .filter(|m| from_rank.map(|r| m.from.rank == r).unwrap_or(true))
+        .filter(|m| m.promotion == promotion);
         
     let m = candidate_moves.next().ok_or(PgnParseError::IllegalMove)?;
     if candidate_moves.next().is_some() {
@@ -192,10 +194,18 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
                         "1-0" | "1-" | "1" => result = GameResult::WhiteWin,
                         "0-1" | "0-" | "0" => result = GameResult::BlackWin,
                         "1/2-1/2" | "1/2-" | "1/2" => result = GameResult::Draw,
-                        _ => return Err(PgnParseError::BadMoveString),
+                        _ => {
+                            dbg!(token);
+                            return Err(PgnParseError::BadMoveString);
+                        }
                     }
                     break
                 },
+                Err(PgnParseError::AmbiguousMove) => {
+                    println!("{}", state.pretty_format());
+                    dbg!(token);
+                    return Err(PgnParseError::AmbiguousMove);
+                }
                 Err(e) => return Err(e),
             };
             state = state.apply_move(m);
@@ -216,7 +226,7 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
 }
 
 
-pub fn parse_multi_pgn(multi_pgn_str: &str) -> Result<Vec<Game>, PgnParseError> {
+pub fn parse_multi_pgn(multi_pgn_str: &str) -> Result<Vec<Result<Game, PgnParseError>>, PgnParseError> {
     if !multi_pgn_str.is_ascii() {
         return Err(PgnParseError::NonAscii);
     }
@@ -239,7 +249,7 @@ pub fn parse_multi_pgn(multi_pgn_str: &str) -> Result<Vec<Game>, PgnParseError> 
             if !in_tags {
                 let last_pgn = &multi_pgn_str[this_pgn_start..this_pgn_end];
                 if last_pgn.len() > 0 {
-                    games.push(parse_single_pgn(last_pgn)?);
+                    games.push(parse_single_pgn(last_pgn));
                 }
                 in_tags = true;
                 this_pgn_start = line_start;
@@ -254,7 +264,7 @@ pub fn parse_multi_pgn(multi_pgn_str: &str) -> Result<Vec<Game>, PgnParseError> 
 
     let last_pgn = &multi_pgn_str[this_pgn_start..];
     if last_pgn.len() > 0 {
-        games.push(parse_single_pgn(last_pgn)?);
+        games.push(parse_single_pgn(last_pgn));
     }
 
     Ok(games)

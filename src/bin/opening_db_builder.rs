@@ -1,4 +1,4 @@
-use std::{time::Duration, sync::Arc, path::Path};
+use std::{time::Duration, sync::Arc, path::Path, collections::HashSet};
 
 use anyhow::Result;
 use futures::Future;
@@ -53,16 +53,29 @@ async fn main() -> Result<()> {
         .filter_map(|l| l.value().attr("href"))
         .filter(|link| link.starts_with("events/"))
         .filter(|link| link.ends_with(".pgn"))
-        .map(|link| format!("https://www.pgnmentor.com/{link}"));
+        .map(|link| format!("https://www.pgnmentor.com/{link}"))
+        .collect::<HashSet<String>>();
 
     let mut opening_db = OpeningDb::new_empty();
-    for link in links {
-        let pgn_data = get_pgn_data(&link, "./pgn_cache", || limiter.until_ready()).await?;
+    let mut total_games = 0;
+    for link in links.iter() {
+        let pgn_data = get_pgn_data(link, "./pgn_cache", || limiter.until_ready()).await?;
 
         let games = parse_multi_pgn(&pgn_data)?;
+        let mut this_games = 0;
         for game in games {
-            opening_db.add_game(&game);
+            match game {
+                Ok(game) => {
+                    opening_db.add_game(&game);
+                    this_games += 1;
+                }
+                Err(e) => {
+                    println!("Error parsing game from {link}: {e}");
+                }
+            }
         }
+        total_games += this_games;
+        println!("Got {} games from {} ({} total)", this_games, link, total_games);
     }
 
     Ok(())

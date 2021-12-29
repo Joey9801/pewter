@@ -194,10 +194,7 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
                         "1-0" | "1-" | "1" => result = GameResult::WhiteWin,
                         "0-1" | "0-" | "0" => result = GameResult::BlackWin,
                         "1/2-1/2" | "1/2-" | "1/2" => result = GameResult::Draw,
-                        _ => {
-                            dbg!(token);
-                            return Err(PgnParseError::BadMoveString);
-                        }
+                        _ => return Err(PgnParseError::BadMoveString),
                     }
                     break
                 },
@@ -377,15 +374,19 @@ mod tests {
             .expect("Expected EXAMPLE_MULTI_PGN to parse successfully");
 
         assert_eq!(games.len(), 2);
+        
+        let g0 = games[0].as_ref().expect("Expected first game to parse");
 
-        assert_eq!(games[0].moves.len(), 89);
-        assert_eq!(games[0].result, GameResult::BlackWin);
-        assert_eq!(games[0].moves[0].format_long_algebraic(), "d2d4");
-        assert_eq!(games[0].moves[88].format_long_algebraic(), "b2b1");
+        assert_eq!(g0.moves.len(), 89);
+        assert_eq!(g0.result, GameResult::BlackWin);
+        assert_eq!(g0.moves[0].format_long_algebraic(), "d2d4");
+        assert_eq!(g0.moves[88].format_long_algebraic(), "b2b1");
 
-        assert_eq!(games[1].moves.len(), 77);
-        assert_eq!(games[1].result, GameResult::WhiteWin);
-        assert_eq!(games[1].moves[0].format_long_algebraic(), "c2c4");
-        assert_eq!(games[1].moves[76].format_long_algebraic(), "f2d2");
+        let g1 = games[1].as_ref().expect("Expected second game to parse");
+
+        assert_eq!(g1.moves.len(), 77);
+        assert_eq!(g1.result, GameResult::WhiteWin);
+        assert_eq!(g1.moves[0].format_long_algebraic(), "c2c4");
+        assert_eq!(g1.moves[76].format_long_algebraic(), "f2d2");
     }
 }

@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use anyhow::Result;
@@ -109,6 +112,17 @@ fn engine_main_thread(
     search_stopper: Arc<AtomicBool>,
 ) -> Result<()> {
     let mut engine = super::Engine::new();
+
+    // TODO: Options/configuration system rather than hardcoded DB path
+    let db_path = Path::new("./opening_db.dat");
+    let workdir = std::env::current_dir().unwrap();
+    let workdir = workdir.to_string_lossy();
+    if db_path.exists() {
+        log::debug!("Loading opening db from {} in {}", db_path.to_string_lossy(), workdir);
+        engine.load_opening_db(Path::new("./opening_db.dat"))?;
+    } else{
+        log::debug!("Couldn't find opening db at {} in {}, proceeding without", db_path.to_string_lossy(), workdir);
+    }
 
     for cmd in cmd_rx {
         match cmd {

@@ -1,4 +1,5 @@
 use std::{
+    path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -18,6 +19,8 @@ pub mod eval;
 pub mod opening_db;
 
 pub use engine_server::EngineServer;
+
+use opening_db::OpeningDb;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Timings {
@@ -86,11 +89,21 @@ pub struct SearchControls {
 #[derive(Clone)]
 pub struct Engine {
     board_state: Option<State>,
+    opening_db: Option<OpeningDb>,
 }
 
 impl Engine {
     pub fn new() -> Self {
-        Self { board_state: None }
+        Self {
+            board_state: None,
+            opening_db: None,
+        }
+    }
+
+    pub fn load_opening_db(&mut self, path: &Path) -> Result<()> {
+        let data = std::fs::read(path)?;
+        self.opening_db = Some(OpeningDb::deserialize(&data)?);
+        Ok(())
     }
 
     pub fn set_board_state(&mut self, new_state: State) {
@@ -105,10 +118,25 @@ impl Engine {
         _timings: Option<Timings>,
         controls: SearchControls,
     ) -> Result<Move, EngineError> {
+        let state = &self.board_state.ok_or(EngineError::NoState)?;
+
+        // Check for opening DB hits first
+        if let Some(db) = &self.opening_db {
+            let book_move = match db.query(state) {
+                [] => None,
+                [r] => Some(r.m),
+                [multiple @ ..] => Some(multiple.choose(&mut thread_rng()).unwrap().m),
+            };
+
+            if let Some(book_move) = book_move {
+                log::debug!("Responding with book move: {}", book_move);
+                return Ok(book_move);
+            }
+        }
+
         let start_time = Instant::now();
         let mut last_perf_info = Instant::now();
 
-        let state = &self.board_state.ok_or(EngineError::NoState)?;
         let depth = max_depth.unwrap_or(5);
 
         let mut alpha = eval::consts::NEG_INFINITY;

@@ -1,6 +1,7 @@
 use std::iter::FromIterator;
 
 use arrayvec::ArrayVec;
+use thiserror::Error;
 
 use crate::BitBoard;
 use crate::BoardPos;
@@ -13,11 +14,18 @@ pub struct Move {
     pub promotion: Option<Piece>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Error)]
 pub enum ParseLongAlgebraicError {
-    MissingChars,
+    #[error("There were non-ascii bytes in a long-algebraic move string")]
     NonAsciiBytes,
+
+    #[error("There weren't enough chars in the string for a long-algebraic move")]
+    MissingChars,
+
+    #[error("One of the squares referenced on a long-algebraic string was invalid")]
     InvalidSquare,
+
+    #[error("A promotion char in a long-algebraic string wasn't one of {{q, r, b, r}}")]
     BadPromotion,
 }
 
@@ -82,6 +90,42 @@ impl std::fmt::Debug for Move {
 impl std::fmt::Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+impl serde::ser::Serialize for Move {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        serializer.serialize_str(&self.format_long_algebraic())
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for Move {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(LongAlgebraicStrVisitor)
+    }
+}
+
+struct LongAlgebraicStrVisitor;
+
+impl<'de> serde::de::Visitor<'de> for LongAlgebraicStrVisitor {
+    type Value = Move;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("A long-algebraic formatted string")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Move::from_long_algebraic(v)
+            .map_err(|e| E::custom(format!("{}", e)))
     }
 }
 

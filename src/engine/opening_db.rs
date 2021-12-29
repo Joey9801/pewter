@@ -1,11 +1,14 @@
-use std::{collections::HashMap};
+use std::collections::{HashMap, HashSet};
+
+use anyhow::Result;
+use serde::{Serialize, Deserialize};
 
 use crate::{Move, State, state::GameResult, Color, io::pgn::Game};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpeningDb(HashMap<u64, Vec<DbResult>>);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbResult {
     /// The potential move 
     pub m: Move,
@@ -83,6 +86,57 @@ impl OpeningDb {
                 }
             }
         }
+    }
+    
+    /// Merge two opening databases into one
+    pub fn merge(mut self, mut other: Self) -> Self {
+        for (key, other_values) in other.0.drain() {
+            if !self.0.contains_key(&key) {
+                self.0.insert(key, other_values);
+                continue;
+            }
+            
+            let this_values = self.0.get_mut(&key).unwrap();
+            
+            'other_v: for other_v in other_values {
+                for this_v in this_values.iter_mut() {
+                    if this_v.m == other_v.m {
+                        this_v.wins += other_v.wins;
+                        this_v.losses += other_v.losses;
+                        this_v.draws += other_v.draws;
+                        continue 'other_v;
+                    }
+                }
+                
+                this_values.push(other_v);
+            }
+        }
+        
+        self
+    }
+    
+    /// Prune entries that have no moves left
+    pub fn prune(&mut self, threshold: usize) {
+        let empties = self.0.iter()
+            .filter(|(_k, v)| v.len() <= threshold)
+            .map(|(k, _v)| *k)
+            .collect::<HashSet<_>>();
+            
+        for e in empties {
+            self.0.remove(&e);
+        }
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>> {
+        let dat = serde_cbor::to_vec(self)?;
+        let compressed_dat = zstd::encode_all(&dat[..], 5)?;
+        Ok(compressed_dat)
+    }
+
+    pub fn deserialize(data: &[u8]) -> Result<Self> {
+        let decompressed_data = zstd::decode_all(data)?;
+        let db = serde_cbor::from_slice(&decompressed_data)?;
+        Ok(db)
     }
     
     pub fn query(&self, state: &State) -> &[DbResult] {

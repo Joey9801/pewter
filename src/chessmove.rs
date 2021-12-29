@@ -124,8 +124,7 @@ impl<'de> serde::de::Visitor<'de> for LongAlgebraicStrVisitor {
     where
         E: serde::de::Error,
     {
-        Move::from_long_algebraic(v)
-            .map_err(|e| E::custom(format!("{}", e)))
+        Move::from_long_algebraic(v).map_err(|e| E::custom(format!("{}", e)))
     }
 }
 
@@ -243,7 +242,7 @@ impl MoveSet {
     pub fn iter(&self) -> impl Iterator<Item = Move> + '_ {
         self.chunks.iter().flat_map(|c| c.iter())
     }
-    
+
     pub fn any(&self) -> bool {
         self.chunks.iter().any(|c| c.any())
     }

@@ -7,7 +7,7 @@ use std::{
     process::{Child, Command, Stdio},
 };
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use clap::Parser;
 
 use pewter::{
@@ -191,7 +191,7 @@ fn find_minimal_difference(
 
 /// Compare Pewter's move generation against stockfish
 #[derive(Parser, Debug)]
-#[clap(about, version, author, name="stockfish_comparer")]
+#[clap(about, version, author, name = "stockfish_comparer")]
 struct Args {
     /// Path to a stockfish executable to compare pewter against
     #[clap(long)]
@@ -229,6 +229,6 @@ fn main() -> Result<()> {
         println!("Checkers:");
         println!("{}", diff.position.checkers.pretty_format());
     }
-    
+
     Ok(())
 }

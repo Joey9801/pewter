@@ -1,16 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::{Move, State, state::GameResult, Color, io::pgn::Game};
+use crate::{io::pgn::Game, state::GameResult, Color, Move, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpeningDb(HashMap<u64, Vec<DbResult>>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbResult {
-    /// The potential move 
+    /// The potential move
     pub m: Move,
 
     /// The number of wins that follow from that move
@@ -33,7 +33,7 @@ impl OpeningDb {
     pub fn new_empty() -> Self {
         Self(HashMap::new())
     }
-    
+
     pub fn add_game(&mut self, game: &Game) {
         let mut state = game.initial;
 
@@ -41,8 +41,7 @@ impl OpeningDb {
         state.zobrist = crate::zobrist::calculate_entire_zobrist(&state);
 
         for m in &game.moves {
-            let existing_set = self.0.entry(state.zobrist)
-                .or_insert(Vec::new());
+            let existing_set = self.0.entry(state.zobrist).or_insert(Vec::new());
 
             let result = match existing_set.iter().position(|r| r.m == *m) {
                 Some(idx) => existing_set.get_mut(idx).unwrap(),
@@ -51,18 +50,20 @@ impl OpeningDb {
                         m: *m,
                         wins: 0,
                         draws: 0,
-                        losses: 0
+                        losses: 0,
                     });
 
                     existing_set.last_mut().unwrap()
-                },
+                }
             };
 
             match (state.to_play, game.result) {
-                (Color::White, GameResult::WhiteWin) |
-                (Color::Black, GameResult::BlackWin) => result.wins += 1,
-                (Color::White, GameResult::BlackWin) |
-                (Color::Black, GameResult::WhiteWin) => result.losses += 1,
+                (Color::White, GameResult::WhiteWin) | (Color::Black, GameResult::BlackWin) => {
+                    result.wins += 1
+                }
+                (Color::White, GameResult::BlackWin) | (Color::Black, GameResult::WhiteWin) => {
+                    result.losses += 1
+                }
                 (_, GameResult::Draw) => result.draws += 1,
                 (_, GameResult::Ongoing) => panic!("Can't add an ongoing game to the opening DB"),
             }
@@ -70,9 +71,9 @@ impl OpeningDb {
             state = state.apply_move(*m);
         }
     }
-    
+
     /// Remove all moves for which the given function returns false
-    /// 
+    ///
     /// Eg `db.filter_moves(|x| x.total_count() >= 10);` to filter all moves that occur fewer than
     /// 10 times in the database
     pub fn filter_moves(&mut self, filter: impl Fn(&DbResult) -> bool) {
@@ -87,7 +88,7 @@ impl OpeningDb {
             }
         }
     }
-    
+
     /// Merge two opening databases into one
     pub fn merge(mut self, mut other: Self) -> Self {
         for (key, other_values) in other.0.drain() {
@@ -95,9 +96,9 @@ impl OpeningDb {
                 self.0.insert(key, other_values);
                 continue;
             }
-            
+
             let this_values = self.0.get_mut(&key).unwrap();
-            
+
             'other_v: for other_v in other_values {
                 for this_v in this_values.iter_mut() {
                     if this_v.m == other_v.m {
@@ -107,21 +108,23 @@ impl OpeningDb {
                         continue 'other_v;
                     }
                 }
-                
+
                 this_values.push(other_v);
             }
         }
-        
+
         self
     }
-    
+
     /// Prune entries that have no moves left
     pub fn prune(&mut self, threshold: usize) {
-        let empties = self.0.iter()
+        let empties = self
+            .0
+            .iter()
             .filter(|(_k, v)| v.len() <= threshold)
             .map(|(k, _v)| *k)
             .collect::<HashSet<_>>();
-            
+
         for e in empties {
             self.0.remove(&e);
         }
@@ -138,7 +141,7 @@ impl OpeningDb {
         let db = serde_cbor::from_slice(&decompressed_data)?;
         Ok(db)
     }
-    
+
     pub fn query(&self, state: &State) -> &[DbResult] {
         match self.0.get(&state.zobrist) {
             Some(r) => r,

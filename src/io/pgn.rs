@@ -1,6 +1,9 @@
 use thiserror::Error;
 
-use crate::{State, Move, Piece, Color, coordinates::consts::*, BoardPos, movegen::legal_moves, File, Rank, io::fen::parse_fen, state::GameResult};
+use crate::{
+    coordinates::consts::*, io::fen::parse_fen, movegen::legal_moves, state::GameResult, BoardPos,
+    Color, File, Move, Piece, Rank, State,
+};
 
 pub struct Game {
     pub initial: State,
@@ -18,7 +21,7 @@ pub enum PgnParseError {
 
     #[error("A SAN encoded move was not legal in the current board state")]
     IllegalMove,
-    
+
     #[error("This PGN parser does not have the ability to parse PGN files that contain comments")]
     Comments,
 
@@ -30,7 +33,7 @@ fn parse_san_move(state: &State, move_str: &str) -> Result<Move, PgnParseError> 
     if !move_str.is_ascii() || move_str.len() < 2 {
         return Err(PgnParseError::BadMoveString);
     }
-    
+
     let mut move_str = move_str.as_bytes();
 
     // Strip redundant metadata that this move results in check/checkmate
@@ -41,7 +44,7 @@ fn parse_san_move(state: &State, move_str: &str) -> Result<Move, PgnParseError> 
     if move_str.len() < 2 {
         return Err(PgnParseError::BadMoveString);
     }
-    
+
     let dest_pos;
     let mut capture = false;
     let mut piece = None;
@@ -85,12 +88,10 @@ fn parse_san_move(state: &State, move_str: &str) -> Result<Move, PgnParseError> 
         };
     } else {
         // The last two characters should now be the destination square
-        let dest_str = std::str::from_utf8(&move_str[(move_str.len() - 2)..])
-            .unwrap(); // Already asserted the string is ascii above
-        dest_pos = BoardPos::from_algebraic(dest_str)
-            .ok_or(PgnParseError::BadMoveString)?;
+        let dest_str = std::str::from_utf8(&move_str[(move_str.len() - 2)..]).unwrap(); // Already asserted the string is ascii above
+        dest_pos = BoardPos::from_algebraic(dest_str).ok_or(PgnParseError::BadMoveString)?;
         move_str = &move_str[..(move_str.len() - 2)];
-        
+
         for b in move_str {
             match b {
                 b'1'..=b'8' if from_rank.is_none() => from_rank = Some(Rank::from_num(b - b'1')),
@@ -121,7 +122,7 @@ fn parse_san_move(state: &State, move_str: &str) -> Result<Move, PgnParseError> 
         .filter(|m| from_file.map(|f| m.from.file == f).unwrap_or(true))
         .filter(|m| from_rank.map(|r| m.from.rank == r).unwrap_or(true))
         .filter(|m| m.promotion == promotion);
-        
+
     let m = candidate_moves.next().ok_or(PgnParseError::IllegalMove)?;
     if candidate_moves.next().is_some() {
         Err(PgnParseError::AmbiguousMove)
@@ -131,18 +132,15 @@ fn parse_san_move(state: &State, move_str: &str) -> Result<Move, PgnParseError> 
 }
 
 /// Strips prefixes that match the pattern `[0-9]\.`.
-/// 
+///
 ///  - Turn a string of the form "13.Nxd3" into "Nxd3"
 ///  - Leaves strings without a move number prefix untouched
 ///  - Leaves results strings (eg "0-1", "1-", "1/2-1/2", etc..) untouched
 fn strip_move_number(token: &str) -> &str {
     assert!(token.is_ascii());
-    
-    let number_count = token
-        .chars()
-        .take_while(|c| c.is_ascii_digit())
-        .count();
-    
+
+    let number_count = token.chars().take_while(|c| c.is_ascii_digit()).count();
+
     if number_count > 0 {
         match token[number_count..].chars().next() {
             Some('.') => &token[(number_count + 1)..],
@@ -171,7 +169,7 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
         if line.starts_with('[') {
             continue;
         }
-        
+
         if line.len() == 0 {
             continue;
         }
@@ -179,7 +177,7 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
         if line.contains('{') || line.contains('{') {
             return Err(PgnParseError::Comments);
         }
-        
+
         for token in line.split_ascii_whitespace() {
             let token = strip_move_number(token);
 
@@ -196,8 +194,8 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
                         "1/2-1/2" | "1/2-" | "1/2" => result = GameResult::Draw,
                         _ => return Err(PgnParseError::BadMoveString),
                     }
-                    break
-                },
+                    break;
+                }
                 Err(PgnParseError::AmbiguousMove) => {
                     println!("{}", state.pretty_format());
                     dbg!(token);
@@ -222,8 +220,9 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
     })
 }
 
-
-pub fn parse_multi_pgn(multi_pgn_str: &str) -> Result<Vec<Result<Game, PgnParseError>>, PgnParseError> {
+pub fn parse_multi_pgn(
+    multi_pgn_str: &str,
+) -> Result<Vec<Result<Game, PgnParseError>>, PgnParseError> {
     if !multi_pgn_str.is_ascii() {
         return Err(PgnParseError::NonAscii);
     }
@@ -267,7 +266,6 @@ pub fn parse_multi_pgn(multi_pgn_str: &str) -> Result<Vec<Result<Game, PgnParseE
     Ok(games)
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::io::fen::parse_fen;
@@ -285,7 +283,7 @@ mod tests {
             "Rxc5", "Nb1", "Rac8", "Be3", "Rc4", "Bd4", "Nc6", "Rb5", "Nxd4", "Nxd4", "Nxc3",
             "Nxc3", "Rxd4", "Ne2", "Ra4", "Ke1", "Rxa3", "Rab1", "Bb4+", "Kf1", "Rd3",
         ];
-        
+
         let starting = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
         let mut state = parse_fen(starting).unwrap();
         for move_str in moves {
@@ -297,7 +295,7 @@ mod tests {
             }
 
             let m = m.expect("Expected test case to contain valid SAN moves");
-            
+
             state = state.apply_move(m);
         }
     }
@@ -323,8 +321,8 @@ mod tests {
 
     #[test]
     fn test_parse_single_pgn() {
-        let game = parse_single_pgn(EXAMPLE_PGN)
-            .expect("Expected EXAMPLE_PGN to parse successfully");
+        let game =
+            parse_single_pgn(EXAMPLE_PGN).expect("Expected EXAMPLE_PGN to parse successfully");
 
         assert_eq!(game.moves.len(), 94);
         assert_eq!(game.moves[0].format_long_algebraic(), "d2d4");
@@ -374,7 +372,7 @@ mod tests {
             .expect("Expected EXAMPLE_MULTI_PGN to parse successfully");
 
         assert_eq!(games.len(), 2);
-        
+
         let g0 = games[0].as_ref().expect("Expected first game to parse");
 
         assert_eq!(g0.moves.len(), 89);

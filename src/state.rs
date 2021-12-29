@@ -362,7 +362,7 @@ impl State {
         next_state.recompute_pins_and_checks();
         next_state
     }
-    
+
     pub fn game_result(&self) -> GameResult {
         let has_legal_moves = crate::movegen::legal_moves(self).any();
         match (self.in_check(), has_legal_moves) {
@@ -370,7 +370,7 @@ impl State {
             (true, false) => match self.to_play {
                 Color::White => GameResult::BlackWin,
                 Color::Black => GameResult::WhiteWin,
-            }
+            },
             (false, false) => GameResult::Draw,
         }
     }

@@ -3,10 +3,10 @@ use std::collections::{HashMap, HashSet};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::{io::pgn::Game, state::GameResult, Color, Move, State};
+use crate::{io::pgn::Game, state::GameResult, Color, Move, State, zobrist::ZobristHash};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpeningDb(HashMap<u64, Vec<DbResult>>);
+pub struct OpeningDb(HashMap<ZobristHash, Vec<DbResult>>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbResult {

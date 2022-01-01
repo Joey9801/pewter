@@ -3,7 +3,7 @@ use bitflags::bitflags;
 use crate::bitboard::masks;
 use crate::coordinates::consts::*;
 use crate::movegen::pseudo_legal::{knight_moves, pawn_attacks};
-use crate::zobrist;
+use crate::zobrist::{self, ZobristHash};
 use crate::{BitBoard, Board, BoardPos, Color, File, Move, Piece, Rank};
 
 pub enum CastleSide {
@@ -62,7 +62,7 @@ pub struct State {
     pub board: Board,
     pub pinned: BitBoard,
     pub checkers: BitBoard,
-    pub zobrist: u64,
+    pub zobrist: ZobristHash,
 }
 
 impl State {
@@ -76,7 +76,7 @@ impl State {
             board: Board::new_empty(),
             pinned: BitBoard::new_empty(),
             checkers: BitBoard::new_empty(),
-            zobrist: 0,
+            zobrist: ZobristHash::null(),
         }
     }
 

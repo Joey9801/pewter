@@ -20,7 +20,7 @@ fn generate_zobrist_numbers() -> Result<()> {
     )?;
     writeln!(
         f,
-        "pub const ZOBRIST_WHITE_TURN: u64 = {};\n",
+        "pub const ZOBRIST_WHITE_TURN: ZobristHash = ZobristHash({});\n",
         rng.next_u64()
     )?;
 
@@ -36,43 +36,37 @@ fn generate_zobrist_numbers() -> Result<()> {
     writeln!(f, "///     color.to_num() * num_pieces * num_positions")?;
     writeln!(f, "///     + piece.to_num * num_positions")?;
     writeln!(f, "///     + pos.to_bitboard_offset()")?;
-    write!(f, "pub const ZOBRIST_PSC: [u64; {}] = [\n", psc_count)?;
-    for _ in 0..(psc_count / 4) {
+    write!(f, "pub const ZOBRIST_PSC: [ZobristHash; {}] = [\n", psc_count)?;
+    for _ in 0..(psc_count / 2) {
         let a = rng.next_u64();
         let b = rng.next_u64();
-        let c = rng.next_u64();
-        let d = rng.next_u64();
-        write!(f, "    {a:0>20}, {b:0>20}, {c:0>20}, {d:0>20},\n")?;
+        writeln!(f, "    ZobristHash({a:0>20}), ZobristHash({b:0>20}),")?;
     }
-    write!(f, "];\n\n").unwrap();
+    writeln!(f, "];\n").unwrap();
 
     writeln!(
         f,
         "/// One zobrist number for each of the 16 possible castling rights combinations"
     )?;
-    write!(f, "pub const ZOBRIST_CASTLING: [u64; 16] = [\n")?;
-    for _ in 0..4 {
+    write!(f, "pub const ZOBRIST_CASTLING: [ZobristHash; 16] = [\n")?;
+    for _ in 0..8 {
         let a = rng.next_u64();
         let b = rng.next_u64();
-        let c = rng.next_u64();
-        let d = rng.next_u64();
-        write!(f, "    {a:0>20}, {b:0>20}, {c:0>20}, {d:0>20},\n")?;
+        writeln!(f, "    ZobristHash({a:0>20}), ZobristHash({b:0>20}),")?;
     }
-    write!(f, "];\n\n").unwrap();
+    writeln!(f, "];\n").unwrap();
 
     writeln!(
         f,
         "/// One zobrist number for each file that could be en-passant"
     )?;
-    write!(f, "pub const ZOBRIST_EP: [u64; 8] = [\n")?;
-    for _ in 0..2 {
+    write!(f, "pub const ZOBRIST_EP: [ZobristHash; 8] = [\n")?;
+    for _ in 0..4 {
         let a = rng.next_u64();
         let b = rng.next_u64();
-        let c = rng.next_u64();
-        let d = rng.next_u64();
-        write!(f, "    {a:0>20}, {b:0>20}, {c:0>20}, {d:0>20},\n")?;
+        writeln!(f, "    ZobristHash({a:0>20}), ZobristHash({b:0>20}),")?;
     }
-    write!(f, "];\n\n").unwrap();
+    writeln!(f, "];\n").unwrap();
 
     Ok(())
 }

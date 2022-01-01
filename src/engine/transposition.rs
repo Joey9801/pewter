@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use rand::prelude::*;
 
-use crate::{State, Move};
+use crate::{State, Move, zobrist::ZobristHash};
 
 use super::Evaluation;
 
@@ -25,7 +25,7 @@ pub struct TranspositionTable {
     /// The maximum number of keys that should appear in the table
     max_size: usize,
 
-    storage: HashMap<u64, TranspositionEntry>,
+    storage: HashMap<ZobristHash, TranspositionEntry>,
     hit_count: usize,
     miss_count: usize,
 }

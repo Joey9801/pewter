@@ -817,6 +817,7 @@ fn uci_interface_thread(messages_rx: Receiver<UciMessage>, commands_tx: Sender<U
             let stdin_handle = stdin.lock();
             let mut lines = stdin_handle.lines();
             while let Some(Ok(line)) = lines.next() {
+                log::debug!("UCI rx: {}", line);
                 stdin_lines_tx
                     .send(line)
                     .expect("Error pushing raw UCI command to internal channel");
@@ -834,8 +835,9 @@ fn uci_interface_thread(messages_rx: Receiver<UciMessage>, commands_tx: Sender<U
                         break;
                     }
                 };
-                log::debug!("Sending message {:?}", msg);
-                write!(stdout_handle, "{}\n", format_message(msg))
+                let msg = format_message(msg);
+                log::debug!("UCI tx: {}", msg);
+                writeln!(stdout_handle, "{}\n", msg)
                     .expect("Error sending UCI message to interface");
             },
             recv(stdin_lines_rx) -> line => {

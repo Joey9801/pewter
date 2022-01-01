@@ -11,7 +11,7 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 
 use crate::{Move, State};
 
-use super::{PerfInfo, SearchControls, Timings};
+use super::{PerfInfo, SearchControls, Timings, EngineError};
 
 #[derive(Clone, Copy, Debug)]
 struct BeginSearchArgs {
@@ -101,11 +101,28 @@ impl EngineServer {
 impl Drop for EngineServer {
     fn drop(&mut self) {
         self.search_stopper.store(true, Ordering::Relaxed);
-        self.cmd_tx.send(EngineCommand::Exit).unwrap();
+        let _ = self.cmd_tx.send(EngineCommand::Exit);
     }
 }
 
 fn engine_main_thread(
+    cmd_rx: Receiver<EngineCommand>,
+    perf_tx: Sender<PerfInfo>,
+    best_move_tx: Sender<Move>,
+    search_stopper: Arc<AtomicBool>,
+) -> Result<()> {
+    let r = engine_main_thread_inner(cmd_rx, perf_tx, best_move_tx, search_stopper);
+
+    if let Err(e) = r.as_ref() {
+        log::error!("Engine main thread exiting because: {:?}", e);
+    } else {
+        log::info!("Engine main thread exiting");
+    }
+    
+    r
+}
+
+fn engine_main_thread_inner(
     cmd_rx: Receiver<EngineCommand>,
     perf_tx: Sender<PerfInfo>,
     best_move_tx: Sender<Move>,
@@ -133,13 +150,20 @@ fn engine_main_thread(
                     perf_info: Some(perf_tx.clone()),
                 };
 
-                let best_move = engine.search_best_move(
+                let best_move = match engine.search_best_move(
                     args.infinite,
                     args.max_depth,
                     args.max_nodes,
                     args.timings,
                     controls,
-                )?;
+                ) {
+                    Ok(m) => m,
+                    Err(EngineError::EarlyStop) => {
+                        log::warn!("Search stop was requested before the first move was found");
+                        continue;
+                    },
+                    other => other?,
+                };
 
                 best_move_tx.send(best_move)?;
             }

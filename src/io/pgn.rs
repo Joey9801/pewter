@@ -196,11 +196,6 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
                     }
                     break;
                 }
-                Err(PgnParseError::AmbiguousMove) => {
-                    println!("{}", state.pretty_format());
-                    dbg!(token);
-                    return Err(PgnParseError::AmbiguousMove);
-                }
                 Err(e) => return Err(e),
             };
             state = state.apply_move(m);

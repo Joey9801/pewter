@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::{io::pgn::Game, state::GameResult, Color, Move, State, zobrist::ZobristHash};
+use pewter_core::{io::pgn::Game, state::GameResult, Color, Move, State, zobrist::ZobristHash};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpeningDb(HashMap<ZobristHash, Vec<DbResult>>);
@@ -38,7 +38,7 @@ impl OpeningDb {
         let mut state = game.initial;
 
         // Be a little defensive
-        state.zobrist = crate::zobrist::calculate_entire_zobrist(&state);
+        state.zobrist = pewter_core::zobrist::calculate_entire_zobrist(&state);
 
         for m in &game.moves {
             let existing_set = self.0.entry(state.zobrist).or_insert(Vec::new());

@@ -3,10 +3,9 @@ use std::time::Duration;
 use anyhow::Result;
 use crossbeam_channel::{select, Sender};
 
-use pewter::engine::engine_server::EngineServer;
-use pewter::engine::PerfInfo;
-use pewter::io::uci::*;
-use pewter::Move;
+use pewter_engine::engine::engine_server::EngineServer;
+use pewter_engine::engine::PerfInfo;
+use pewter_core::{Move, io::uci::*};
 
 #[derive(Clone, Debug, Default)]
 struct Options {
@@ -94,19 +93,19 @@ fn handle_uci_cmd(
                 Position::StartPos => "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
                 Position::FenString(s) => s,
             };
-            let mut state = pewter::io::fen::parse_fen(fen)?;
+            let mut state = pewter_core::io::fen::parse_fen(fen)?;
             for m in moves {
                 state = state.apply_move(m);
             }
 
             log::info!(
                 "Setting position to \"{}\"",
-                pewter::io::fen::format_fen(&state)
+                pewter_core::io::fen::format_fen(&state)
             );
             engine.set_state(state)?;
         }
         UciCommand::Go(go) => {
-            let timings = pewter::engine::Timings {
+            let timings = pewter_engine::engine::Timings {
                 white_remaining: go.white_time,
                 black_remaining: go.black_time,
                 white_increment: go.white_increment.unwrap_or(Duration::ZERO),

@@ -10,7 +10,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::Parser;
 
-use pewter::{
+use pewter_core::{
     io::fen::{format_fen, parse_fen},
     Move, State,
 };
@@ -165,7 +165,7 @@ fn find_minimal_difference(
             break None;
         }
 
-        let ours = pewter::movegen::perft_breakdown(state, depth);
+        let ours = pewter_core::movegen::perft_breakdown(state, depth);
         let stockfish = sf.perft(state, depth);
 
         match compare_perft_outputs(ours, stockfish) {

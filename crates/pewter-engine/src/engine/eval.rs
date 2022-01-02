@@ -1,9 +1,9 @@
-use crate::{Color, Piece, State, BoardPos};
+use pewter_core::{Color, Piece, State, BoardPos};
 
 pub type Evaluation = i32;
 
 pub mod consts {
-    use crate::{Piece, BoardPos};
+    use pewter_core::{Piece, BoardPos};
     use super::Evaluation;
 
     pub const POS_INFINITY: Evaluation = Evaluation::MAX - 1024;

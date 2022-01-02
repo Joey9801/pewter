@@ -3,7 +3,8 @@ use std::fmt::Write;
 
 use crossbeam_channel::Sender;
 
-use crate::{State, Move, movegen::legal_moves, engine::ordering::order_moves, Color};
+use pewter_core::{State, Move, movegen::legal_moves, Color};
+use crate::engine::ordering::order_moves;
 
 use super::{eval, PerfInfo, EngineError, Evaluation, transposition::{TranspositionTable, NodeType}, Timings};
 

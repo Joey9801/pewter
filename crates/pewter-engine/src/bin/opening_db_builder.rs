@@ -9,11 +9,11 @@ use anyhow::Result;
 use clap::Parser;
 use futures::Future;
 use governor::{Quota, RateLimiter};
-use pewter::{
-    engine::opening_db::OpeningDb,
+use pewter_core::{
     io::pgn::{parse_multi_pgn, Game},
     State,
 };
+use pewter_engine::engine::opening_db::OpeningDb;
 use rayon::prelude::*;
 use scraper::{Html, Selector};
 
@@ -161,7 +161,7 @@ async fn main() -> Result<()> {
     };
 
     if let Some(debug_fen) = args.debug_fen {
-        let state = pewter::io::fen::parse_fen(&debug_fen).unwrap();
+        let state = pewter_core::io::fen::parse_fen(&debug_fen).unwrap();
         debug_print_db(&db, &state);
     }
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use rand::prelude::*;
 
-use crate::{State, Move, zobrist::ZobristHash};
+use pewter_core::{State, Move, zobrist::ZobristHash};
 
 use super::Evaluation;
 

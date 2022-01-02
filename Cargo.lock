@@ -766,9 +766,9 @@ checksum = "68f2d64f2edebec4ce84ad108148e67e1064789bee435edc5b60ad398714a3a9"
 
 [[package]]
 name = "itertools"
-version = "0.10.1"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
+checksum = "a9a9d19fa1e79b6215ff29b9d6880b706147f16e9b1dbb1e4e5947b5b02bc5e3"
 dependencies = [
  "either",
 ]
@@ -1071,7 +1071,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
-name = "pewter"
+name = "pewter-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrayvec",
+ "bitflags",
+ "criterion",
+ "crossbeam-channel",
+ "log",
+ "proptest",
+ "rand 0.8.4",
+ "serde",
+ "thiserror",
+ "variant_count",
+]
+
+[[package]]
+name = "pewter-engine"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1079,12 +1096,12 @@ dependencies = [
  "bitflags",
  "chrono",
  "clap 3.0.0-rc.7",
- "criterion",
  "crossbeam-channel",
  "fern",
  "futures",
  "governor",
  "log",
+ "pewter-core",
  "proptest",
  "rand 0.8.4",
  "rayon",

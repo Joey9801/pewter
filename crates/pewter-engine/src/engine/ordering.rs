@@ -1,6 +1,6 @@
 use std::cmp::Reverse;
 
-use crate::{Move, State, Piece};
+use pewter_core::{Move, State, Piece};
 
 use super::{eval::{Evaluation, self}, transposition::TranspositionTable};
 

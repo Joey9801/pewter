@@ -9,7 +9,7 @@ use std::{
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 
-use crate::{Move, State};
+use pewter_core::{Move, State};
 
 use super::{PerfInfo, SearchControls, Timings, EngineError};
 

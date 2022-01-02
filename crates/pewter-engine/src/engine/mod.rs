@@ -1,6 +1,6 @@
 use std::{path::Path, time::Duration};
 
-use crate::{Move, State};
+use pewter_core::{Move, State};
 
 use anyhow::Result;
 use crossbeam_channel::SendError;

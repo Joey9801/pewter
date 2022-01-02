@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use pewter::{io::fen::parse_fen, Move};
+use pewter_core::{io::fen::parse_fen, Move};
 
 struct ApplyMoveBenchmark {
     name: &'static str,
@@ -61,7 +61,7 @@ pub fn generate_legal_moves(c: &mut Criterion) {
             parse_fen(pos).expect("Expected benchmark definition to have a valid FEN string");
 
         group.bench_function(*pos, |b| {
-            b.iter(|| black_box(pewter::movegen::legal_moves(black_box(&state))));
+            b.iter(|| black_box(pewter_core::movegen::legal_moves(black_box(&state))));
         });
     }
 }

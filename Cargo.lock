@@ -1093,26 +1093,54 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrayvec",
- "bitflags",
  "chrono",
- "clap 3.0.0-rc.7",
  "crossbeam-channel",
  "fern",
- "futures",
- "governor",
  "log",
  "pewter-core",
- "proptest",
  "rand 0.8.4",
- "rayon",
- "reqwest",
- "scraper",
  "serde",
  "serde_cbor",
  "thiserror",
- "tokio",
  "variant_count",
  "zstd",
+]
+
+[[package]]
+name = "pewter-opening-db-builder"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap 3.0.0-rc.7",
+ "futures",
+ "governor",
+ "pewter-core",
+ "pewter-engine",
+ "rayon",
+ "reqwest",
+ "scraper",
+ "tokio",
+]
+
+[[package]]
+name = "pewter-search-debugger"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.0.0-rc.7",
+ "crossbeam-channel",
+ "pewter-core",
+ "pewter-engine",
+]
+
+[[package]]
+name = "pewter-stockfish-comparer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.0.0-rc.7",
+ "pewter-core",
 ]
 
 [[package]]

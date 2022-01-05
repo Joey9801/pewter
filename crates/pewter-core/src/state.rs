@@ -2,7 +2,6 @@ use bitflags::bitflags;
 
 use crate::bitboard::masks;
 use crate::coordinates::consts::*;
-use crate::movegen::pseudo_legal::knight_moves;
 use crate::zobrist::{self, ZobristHash};
 use crate::{BitBoard, Board, BoardPos, Color, File, Move, Piece, Rank};
 
@@ -149,15 +148,12 @@ impl State {
             }
         }
 
-        for knight in self
+        let checking_knights = self
             .board
             .color_piece_board(opp_color, Piece::Knight)
-            .iter_set()
-        {
-            if knight_moves(knight, k_mask.inverse()).any() {
-                self.checkers.set(knight);
-            }
-        }
+            .intersect_with(masks::knight_moves(k_pos));
+
+        self.checkers.union_inplace(checking_knights);
 
         self.pinned
             .intersect_inplace(self.board.color_board(our_color));

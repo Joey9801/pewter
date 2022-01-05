@@ -100,7 +100,7 @@ fn pawn_special(state: &State, pos: BoardPos, chunk: &mut MoveSetChunk, check_ma
 
     if state
         .checkers
-        .intersect_with(!BitBoard::single(old_pawn_pos))
+        .with_cleared(old_pawn_pos)
         .any()
     {
         // There are pieces giving check that are not this pawn
@@ -178,7 +178,7 @@ fn legal_king_pos(state: &State, pos: BoardPos) -> bool {
     let knight_check = state
         .board
         .color_piece_board(!state.to_play, Piece::Knight)
-        .intersect_with(pseudo_legal::knight_moves(pos, BitBoard::new_empty()))
+        .intersect_with(masks::knight_moves(pos))
         .any();
 
     let pawns = state.board.color_piece_board(!state.to_play, Piece::Pawn);

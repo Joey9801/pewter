@@ -114,7 +114,7 @@ pub const fn rook_rays(pos: BoardPos) -> BitBoard {
     BitBoard::new_empty()
         .union_with(rank(pos.rank))
         .union_with(file(pos.file))
-        .intersect_with(BitBoard::single(pos).inverse())
+        .with_cleared(pos)
 }
 
 /// The squares a bishop could move to if there were no other pieces on the board
@@ -344,28 +344,24 @@ const fn compute_pawn_pushes() -> [[BitBoard; 64]; 2] {
             let white_single = BoardPos::from_file_rank(
                 file, Rank::from_num(ranknum + 1),
             );
-            white_table = white_table
-                .union_with(BitBoard::single(white_single));
+            white_table = white_table.with_set(white_single);
             if ranknum == 1 {
                 let white_double = BoardPos::from_file_rank(
                     file, Rank::from_num(ranknum + 2),
                 );
-                white_table = white_table
-                    .union_with(BitBoard::single(white_double));
+                white_table = white_table.with_set(white_double);
             }
             
             let mut black_table = BitBoard::new_empty();
             let black_single = BoardPos::from_file_rank(
                 file, Rank::from_num(ranknum - 1),
             );
-            black_table = black_table
-                .union_with(BitBoard::single(black_single));
+            black_table = black_table.with_set(black_single);
             if ranknum == 6 {
                 let black_double = BoardPos::from_file_rank(
                     file, Rank::from_num(ranknum - 2),
                 );
-                black_table = black_table
-                    .union_with(BitBoard::single(black_double));
+                black_table = black_table.with_set(black_double);
             }
 
             table[Color::White.to_num() as usize][pos.to_bitboard_offset() as usize] = white_table;
@@ -404,15 +400,13 @@ const fn compute_pawn_attacks() -> [[BitBoard; 64]; 2] {
                     let white_left = BoardPos::from_file_rank(
                         File::from_num(filenum - 1), white_ahead,
                     );
-                    white_table = white_table
-                        .union_with(BitBoard::single(white_left));
+                    white_table = white_table.with_set(white_left);
                 }
                 if filenum < 7 {
                     let white_right = BoardPos::from_file_rank(
                         File::from_num(filenum + 1), white_ahead,
                     );
-                    white_table = white_table
-                        .union_with(BitBoard::single(white_right));
+                    white_table = white_table.with_set(white_right);
                 }
                 table[Color::White.to_num() as usize][pos.to_bitboard_offset() as usize] = white_table;
             }
@@ -424,15 +418,13 @@ const fn compute_pawn_attacks() -> [[BitBoard; 64]; 2] {
                     let black_left = BoardPos::from_file_rank(
                         File::from_num(filenum - 1), black_ahead,
                     );
-                    black_table = black_table
-                        .union_with(BitBoard::single(black_left));
+                    black_table = black_table.with_set(black_left);
                 }
                 if filenum < 7 {
                     let black_right = BoardPos::from_file_rank(
                         File::from_num(filenum + 1), black_ahead,
                     );
-                    black_table = black_table
-                        .union_with(BitBoard::single(black_right));
+                    black_table = black_table.with_set(black_right);
                 }
                 table[Color::Black.to_num() as usize][pos.to_bitboard_offset() as usize] = black_table;
             }
@@ -449,4 +441,57 @@ const PAWN_ATTACKS: [[BitBoard; 64]; 2] = compute_pawn_attacks();
 
 pub const fn pawn_attacks(color: Color, pos: BoardPos) -> BitBoard {
     PAWN_ATTACKS[color.to_num() as usize][pos.to_bitboard_offset() as usize]
+}
+
+
+const KNIGHT_MOVE_OFFSETS: [(i8, i8); 8] = [
+    (2, -1),
+    (2, 1),
+    (1, -2),
+    (1, 2),
+    (-1, -2),
+    (-1, 2),
+    (-2, -1),
+    (-2, 1),
+];
+
+const fn compute_knight_moves() -> [BitBoard; 64] {
+    let mut table = [BitBoard::new_empty(); 64];
+
+    let mut source = 0;
+    while source < 64 {
+        let source_pos = BoardPos::from_bitboard_offset(source);
+
+        let mut moves = BitBoard::new_empty();
+        let source_f = source_pos.file.to_num() as i8;
+        let source_r = source_pos.rank.to_num() as i8;
+        
+        let mut move_idx = 0;
+        while move_idx < 8 {
+            let dest_f = source_f + KNIGHT_MOVE_OFFSETS[move_idx].0;
+            let dest_r = source_r + KNIGHT_MOVE_OFFSETS[move_idx].1;
+            
+            if dest_f >= 0 && dest_f <= 7 && dest_r >= 0 && dest_r <= 7 {
+                let dest = BoardPos::from_file_rank(
+                    File::from_num(dest_f as u8),
+                    Rank::from_num(dest_r as u8)
+                );
+                
+                moves = moves.with_set(dest);
+            }
+
+            move_idx += 1;
+        }
+        
+        table[source as usize] = moves;
+        source += 1;
+    }
+
+    table
+}
+
+const KNIGHT_MOVES: [BitBoard; 64] = compute_knight_moves();
+
+pub const fn knight_moves(pos: BoardPos) -> BitBoard {
+    KNIGHT_MOVES[pos.to_bitboard_offset() as usize]
 }

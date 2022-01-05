@@ -78,44 +78,15 @@ fn pawn_psuedo_legal(
     }
 }
 
-const KNIGHT_MOVE_OFFSETS: &[(i8, i8)] = &[
-    (2, -1),
-    (2, 1),
-    (1, -2),
-    (1, 2),
-    (-1, -2),
-    (-1, 2),
-    (-2, -1),
-    (-2, 1),
-];
-
 fn knight_pseudo_legal(source: BoardPos, our_pieces: BitBoard) -> MoveSetChunk {
+    let dest_set = masks::knight_moves(source)
+        .intersect_with(our_pieces.inverse());
+
     MoveSetChunk {
         source,
-        dest_set: knight_moves(source, our_pieces),
+        dest_set,
         promotion: false,
     }
-}
-
-pub fn knight_moves(source: BoardPos, blockers: BitBoard) -> BitBoard {
-    let mut moves = BitBoard::new_empty();
-    let source_nums = (source.file.to_num() as i8, source.rank.to_num() as i8);
-    for dest_nums in KNIGHT_MOVE_OFFSETS
-        .iter()
-        .map(|km_off| (source_nums.0 + km_off.0, source_nums.1 + km_off.1))
-        .filter(|(x, _)| *x >= 0 && *x <= 7)
-        .filter(|(_, y)| *y >= 0 && *y <= 7)
-    {
-        let dest = BoardPos::from_file_rank(
-            File::from_num(dest_nums.0 as u8),
-            Rank::from_num(dest_nums.1 as u8),
-        );
-
-        moves.set(dest);
-    }
-
-    moves.intersect_inplace(!blockers);
-    moves
 }
 
 fn sliding_piece_pseudo_legal(

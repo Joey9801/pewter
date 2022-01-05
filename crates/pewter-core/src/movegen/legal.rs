@@ -91,8 +91,8 @@ fn pawn_special(state: &State, pos: BoardPos, chunk: &mut MoveSetChunk, check_ma
         None => return,
     };
 
-    let pa = pseudo_legal::pawn_attacks(state.to_play, pos, BitBoard::single(ep_pos));
-    if !pa.any() {
+    let pa = masks::pawn_attacks(state.to_play, pos);
+    if !pa.get(ep_pos) {
         return;
     }
 
@@ -183,7 +183,7 @@ fn legal_king_pos(state: &State, pos: BoardPos) -> bool {
 
     let pawns = state.board.color_piece_board(!state.to_play, Piece::Pawn);
     let pawn_check = pawns
-        .intersect_with(pseudo_legal::pawn_attacks(state.to_play, pos, pawns))
+        .intersect_with(masks::pawn_attacks(state.to_play, pos))
         .any();
 
     let opp_king = state.board.color_piece_board(!state.to_play, Piece::King);

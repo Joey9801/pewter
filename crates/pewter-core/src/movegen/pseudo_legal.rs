@@ -1,5 +1,5 @@
 use crate::{
-    chessmove::MoveSetChunk, BitBoard, BoardPos, Color, File, MoveSet, Piece, Rank, State,
+    chessmove::MoveSetChunk, BitBoard, BoardPos, Color, File, MoveSet, Piece, Rank, State, bitboard::masks,
 };
 
 pub fn all_pseudo_legal(state: &State) -> MoveSet {
@@ -55,58 +55,27 @@ fn pawn_psuedo_legal(
     our_pieces: BitBoard,
     opp_pieces: BitBoard,
 ) -> MoveSetChunk {
-    let dest_set = pawn_pushes(color, source, our_pieces, opp_pieces)
-        .union_with(pawn_attacks(color, source, opp_pieces));
+    let all_union = our_pieces.union_with(opp_pieces);
+
+    let pushes = if source.rank == color.numbered_rank(2) &&
+        all_union.get(BoardPos::from_file_rank(source.file, color.numbered_rank(3)))
+    {
+        // Can't jump over a piece with a double push
+        BitBoard::new_empty()
+    } else {
+        masks::pawn_pushes(color, source).intersect_with(all_union.inverse())
+    };
+    
+    let attacks = masks::pawn_attacks(color, source)
+        .intersect_with(opp_pieces);
+
+    let dest_set = pushes.union_with(attacks);
     let promotion = source.rank == color.numbered_rank(7);
     MoveSetChunk {
         source,
         dest_set,
         promotion,
     }
-}
-
-fn pawn_pushes(
-    color: Color,
-    source: BoardPos,
-    our_pieces: BitBoard,
-    opp_pieces: BitBoard,
-) -> BitBoard {
-    let mut dest_set = BitBoard::new_empty();
-    let all_bb = our_pieces.union_with(opp_pieces);
-    let single_dest = source.forward(color).unwrap();
-    if !all_bb[single_dest] {
-        dest_set.set(single_dest);
-    }
-
-    // Double pushes
-    if source.rank == color.numbered_rank(2) {
-        let double_dest = single_dest.forward(color).unwrap();
-        let m = BitBoard::single(single_dest).union_with(BitBoard::single(double_dest));
-
-        if !all_bb.intersect_with(m).any() {
-            dest_set.set(double_dest);
-        }
-    }
-
-    dest_set
-}
-
-pub fn pawn_attacks(color: Color, source: BoardPos, opp_pieces: BitBoard) -> BitBoard {
-    let mut dest_set = BitBoard::new_empty();
-    if let Some(single_dest) = source.forward(color) {
-        if let Some(attack_pos) = single_dest.left() {
-            if opp_pieces[attack_pos] {
-                dest_set.set(attack_pos)
-            }
-        }
-        if let Some(attack_pos) = single_dest.right() {
-            if opp_pieces[attack_pos] {
-                dest_set.set(attack_pos)
-            }
-        }
-    }
-
-    dest_set
 }
 
 const KNIGHT_MOVE_OFFSETS: &[(i8, i8)] = &[

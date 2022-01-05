@@ -326,3 +326,127 @@ pub const fn between(a: BoardPos, b: BoardPos) -> BitBoard {
     let b = b.to_bitboard_offset() as usize;
     BETWEEN_TABLE[a][b]
 }
+
+
+const fn compute_pawn_pushes() -> [[BitBoard; 64]; 2] {
+    let mut table = [[BitBoard::new_empty(); 64]; 2];
+
+    // NB: Pawns cannot exist on the first/last rank
+    let mut ranknum = 1;
+    while ranknum < 7 {
+        let rank = Rank::from_num(ranknum);
+        let mut filenum = 0;
+        while filenum < 8 {
+            let file = File::from_num(filenum);
+            let pos = BoardPos::from_file_rank(file, rank);
+            
+            let mut white_table = BitBoard::new_empty();
+            let white_single = BoardPos::from_file_rank(
+                file, Rank::from_num(ranknum + 1),
+            );
+            white_table = white_table
+                .union_with(BitBoard::single(white_single));
+            if ranknum == 1 {
+                let white_double = BoardPos::from_file_rank(
+                    file, Rank::from_num(ranknum + 2),
+                );
+                white_table = white_table
+                    .union_with(BitBoard::single(white_double));
+            }
+            
+            let mut black_table = BitBoard::new_empty();
+            let black_single = BoardPos::from_file_rank(
+                file, Rank::from_num(ranknum - 1),
+            );
+            black_table = black_table
+                .union_with(BitBoard::single(black_single));
+            if ranknum == 6 {
+                let black_double = BoardPos::from_file_rank(
+                    file, Rank::from_num(ranknum - 2),
+                );
+                black_table = black_table
+                    .union_with(BitBoard::single(black_double));
+            }
+
+            table[Color::White.to_num() as usize][pos.to_bitboard_offset() as usize] = white_table;
+            table[Color::Black.to_num() as usize][pos.to_bitboard_offset() as usize] = black_table;
+            filenum += 1;
+        }
+        ranknum += 1;
+    }
+    
+    table
+}
+
+const PAWN_PUSHES: [[BitBoard; 64]; 2] = compute_pawn_pushes();
+
+pub const fn pawn_pushes(color: Color, pos: BoardPos) -> BitBoard {
+    PAWN_PUSHES[color.to_num() as usize][pos.to_bitboard_offset() as usize]
+}
+
+const fn compute_pawn_attacks() -> [[BitBoard; 64]; 2] {
+    let mut table = [[BitBoard::new_empty(); 64]; 2];
+
+    // NB: Pawns cannot exist on the first/last rank, but fill out the masks for those positions
+    // anyway, as they are sometimes used "backwards" to test for check.
+    let mut ranknum = 0;
+    while ranknum < 8 {
+        let rank = Rank::from_num(ranknum);
+        let mut filenum = 0;
+        while filenum < 8 {
+            let file = File::from_num(filenum);
+            let pos = BoardPos::from_file_rank(file, rank);
+            
+            if ranknum < 7 {
+                let mut white_table = BitBoard::new_empty();
+                let white_ahead = Rank::from_num(ranknum + 1);
+                if filenum > 0 {
+                    let white_left = BoardPos::from_file_rank(
+                        File::from_num(filenum - 1), white_ahead,
+                    );
+                    white_table = white_table
+                        .union_with(BitBoard::single(white_left));
+                }
+                if filenum < 7 {
+                    let white_right = BoardPos::from_file_rank(
+                        File::from_num(filenum + 1), white_ahead,
+                    );
+                    white_table = white_table
+                        .union_with(BitBoard::single(white_right));
+                }
+                table[Color::White.to_num() as usize][pos.to_bitboard_offset() as usize] = white_table;
+            }
+            
+            if ranknum > 0 {
+                let mut black_table = BitBoard::new_empty();
+                let black_ahead = Rank::from_num(ranknum - 1);
+                if filenum > 0 {
+                    let black_left = BoardPos::from_file_rank(
+                        File::from_num(filenum - 1), black_ahead,
+                    );
+                    black_table = black_table
+                        .union_with(BitBoard::single(black_left));
+                }
+                if filenum < 7 {
+                    let black_right = BoardPos::from_file_rank(
+                        File::from_num(filenum + 1), black_ahead,
+                    );
+                    black_table = black_table
+                        .union_with(BitBoard::single(black_right));
+                }
+                table[Color::Black.to_num() as usize][pos.to_bitboard_offset() as usize] = black_table;
+            }
+
+            filenum += 1;
+        }
+        ranknum += 1;
+    }
+    
+    table
+}
+
+const PAWN_ATTACKS: [[BitBoard; 64]; 2] = compute_pawn_attacks();
+
+pub const fn pawn_attacks(color: Color, pos: BoardPos) -> BitBoard {
+    PAWN_ATTACKS[color.to_num() as usize][pos.to_bitboard_offset() as usize]
+}

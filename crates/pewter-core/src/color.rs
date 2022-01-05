@@ -26,7 +26,7 @@ impl Color {
 
     /// The nth rank as seen by this color
     /// ```
-    /// # use pewter::{Color, Rank};
+    /// # use pewter_core::{Color, Rank};
     /// assert_eq!(Color::White.numbered_rank(1), Rank::R1);
     /// assert_eq!(Color::Black.numbered_rank(2), Rank::R7);
     /// ```

@@ -2,7 +2,7 @@ use bitflags::bitflags;
 
 use crate::bitboard::masks;
 use crate::coordinates::consts::*;
-use crate::movegen::pseudo_legal::{knight_moves, pawn_attacks};
+use crate::movegen::pseudo_legal::knight_moves;
 use crate::zobrist::{self, ZobristHash};
 use crate::{BitBoard, Board, BoardPos, Color, File, Move, Piece, Rank};
 
@@ -141,7 +141,10 @@ impl State {
             .color_piece_board(opp_color, Piece::Pawn)
             .iter_set()
         {
-            if pawn_attacks(!self.to_play, pawn, k_mask).any() {
+            let pawn_attacks = masks::pawn_attacks(opp_color, pawn)
+                .intersect_with(k_mask);
+
+            if pawn_attacks.any() {
                 self.checkers.set(pawn);
             }
         }

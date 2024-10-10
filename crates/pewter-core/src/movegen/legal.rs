@@ -98,11 +98,7 @@ fn pawn_special(state: &State, pos: BoardPos, chunk: &mut MoveSetChunk, check_ma
 
     let old_pawn_pos = ep_pos.forward(!state.to_play).unwrap();
 
-    if state
-        .checkers
-        .with_cleared(old_pawn_pos)
-        .any()
-    {
+    if state.checkers.with_cleared(old_pawn_pos).any() {
         // There are pieces giving check that are not this pawn
         return;
     }

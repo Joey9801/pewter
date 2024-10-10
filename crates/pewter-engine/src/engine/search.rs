@@ -190,12 +190,13 @@ impl Searcher {
         beta: Evaluation,
     ) -> Result<SearchResult, EngineError> {
         self.nodes_searched += 1;
-        let depth_remaining = max_depth - ply_from_root;
 
         if ply_from_root > max_depth {
             let quiesce_score = self.quiescence_search(state, alpha, beta);
             return Ok(SearchResult::just_eval(quiesce_score));
         }
+
+        let depth_remaining = max_depth - ply_from_root;
         
         // First, check the transposition table in case we've been here before
         if let Some(tt) = self.t_table.probe(state, depth_remaining, alpha, beta) {

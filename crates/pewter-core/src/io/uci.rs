@@ -837,7 +837,7 @@ fn uci_interface_thread(messages_rx: Receiver<UciMessage>, commands_tx: Sender<U
                 };
                 let msg = format_message(msg);
                 log::debug!("UCI tx: {}", msg);
-                writeln!(stdout_handle, "{}\n", msg)
+                writeln!(stdout_handle, "{}", msg)
                     .expect("Error sending UCI message to interface");
             },
             recv(stdin_lines_rx) -> line => {

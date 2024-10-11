@@ -6,8 +6,7 @@ use crossbeam_channel::{select, Sender};
 use pewter_core::{io::uci::*, Move};
 use pewter_engine::engine::engine_server::EngineServer;
 use pewter_engine::engine::PerfInfo;
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{prelude::*, EnvFilter};
+use tracing_subscriber::prelude::*;
 
 #[derive(Clone, Debug, Default)]
 struct Options {
@@ -44,30 +43,33 @@ impl UciOptions for Options {
 }
 
 fn main() -> Result<()> {
-    let filter = EnvFilter::builder()
-        .with_default_directive(LevelFilter::INFO.into())
-        .from_env()
-        .unwrap();
-    let layer = tracing_subscriber::fmt::layer()
-        .with_writer(std::io::stderr)
-        .with_filter(filter);
+    let file = tracing_appender::rolling::hourly("./logs", "pewter.log");
+    let file_layer = tracing_subscriber::fmt::layer().with_writer(file);
 
-    tracing_subscriber::registry().with(layer).init();
+    tracing_subscriber::registry()
+        .with(file_layer)
+        .init();
 
-    tracing::warn!("foo");
+    tracing::info!("Starting up pewter-engine");
 
     let uci = UciInterface::<Options>::startup()?;
     let mut engine = EngineServer::startup()?;
 
-    loop {
-        select! {
-            recv(uci.rx) -> uci_msg => if handle_uci_cmd(uci_msg?, &uci.tx, &mut engine)? {
-                break Ok(());
-            },
-            recv(engine.perf_rx) -> perf => handle_engine_perf(perf?, &uci.tx)?,
-            recv(engine.best_move_rx) -> m => handle_engine_best_move(m?, &uci.tx)?,
+    let res = move || -> Result<()> {
+        loop {
+            select! {
+                recv(uci.rx) -> uci_msg => if handle_uci_cmd(uci_msg?, &uci.tx, &mut engine)? {
+                    break Ok(());
+                },
+                recv(engine.perf_rx) -> perf => handle_engine_perf(perf?, &uci.tx)?,
+                recv(engine.best_move_rx) -> m => handle_engine_best_move(m?, &uci.tx)?,
+            }
         }
-    }
+    }();
+
+    tracing::info!(?res, "Shutting down pewter-engine");
+
+    res
 }
 
 fn handle_uci_cmd(

@@ -3,9 +3,11 @@ use std::time::Duration;
 use anyhow::Result;
 use crossbeam_channel::{select, Sender};
 
+use pewter_core::{io::uci::*, Move};
 use pewter_engine::engine::engine_server::EngineServer;
 use pewter_engine::engine::PerfInfo;
-use pewter_core::{Move, io::uci::*};
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::{prelude::*, EnvFilter};
 
 #[derive(Clone, Debug, Default)]
 struct Options {
@@ -42,20 +44,17 @@ impl UciOptions for Options {
 }
 
 fn main() -> Result<()> {
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{}[{}][{}] {}",
-                chrono::Local::now().format("[%Y-%m-%dT%H:%M:%S]"),
-                record.target(),
-                record.level(),
-                message
-            ))
-        })
-        .level(log::LevelFilter::Debug)
-        .chain(std::io::stderr())
-        .chain(fern::log_file("pewter.log")?)
-        .apply()?;
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env()
+        .unwrap();
+    let layer = tracing_subscriber::fmt::layer()
+        .with_writer(std::io::stderr)
+        .with_filter(filter);
+
+    tracing_subscriber::registry().with(layer).init();
+
+    tracing::warn!("foo");
 
     let uci = UciInterface::<Options>::startup()?;
     let mut engine = EngineServer::startup()?;
@@ -84,7 +83,7 @@ fn handle_uci_cmd(
         }
         UciCommand::IsReady => uci_tx.send(UciMessage::ReadyOk)?,
         UciCommand::Quit => {
-            log::info!("Received quit command, shutting down");
+            tracing::info!("Received quit command, shutting down");
             return Ok(true);
         }
         UciCommand::Position { position, moves } => {
@@ -98,7 +97,7 @@ fn handle_uci_cmd(
                 state = state.apply_move(m);
             }
 
-            log::info!(
+            tracing::info!(
                 "Setting position to \"{}\"",
                 pewter_core::io::fen::format_fen(&state)
             );

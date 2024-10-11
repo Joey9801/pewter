@@ -138,21 +138,21 @@ impl Searcher {
         let mut last_pv = None;
         for depth in 1.. {
             if !infinite && depth >= max_depth {
-                log::debug!("Stopping search because reached max_depth of {max_depth}");
+                tracing::debug!("Stopping search because reached max_depth of {max_depth}");
                 break;
             }
 
             if !infinite && self.last_search_start.elapsed() > time_heuristic {
-                log::debug!("Stopping search because of time heuristic");
+                tracing::debug!("Stopping search because of time heuristic");
                 break;
             }
             
             if self.controls.stop.load(Ordering::Relaxed) {
-                log::debug!("Stopping search because stop signal recieved");
+                tracing::debug!("Stopping search because stop signal recieved");
                 break;
             }
 
-            log::debug!("Beginning search at depth {depth}");
+            tracing::debug!("Beginning search at depth {depth}");
             let result = self.search_moves(
                 state,
                 0,
@@ -167,7 +167,7 @@ impl Searcher {
                 .as_ref()
                 .expect("Search concluded without a principal variation");
             
-            log::info!("Searched depth {}, pv {}", depth, last_pv.format());
+            tracing::info!("Searched depth {}, pv {}", depth, last_pv.format());
         }
 
         self.emit_perf_msg()?;

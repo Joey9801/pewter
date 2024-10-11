@@ -1,17 +1,12 @@
-use std::{
-    path::Path,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 
+use super::{EngineError, PerfInfo, SearchControls, Timings};
 use pewter_core::{Move, State};
-
-use super::{PerfInfo, SearchControls, Timings, EngineError};
 
 #[derive(Clone, Copy, Debug)]
 struct BeginSearchArgs {
@@ -114,11 +109,11 @@ fn engine_main_thread(
     let r = engine_main_thread_inner(cmd_rx, perf_tx, best_move_tx, search_stopper);
 
     if let Err(e) = r.as_ref() {
-        log::error!("Engine main thread exiting because: {:?}", e);
+        tracing::error!("Engine main thread exiting because: {:?}", e);
     } else {
-        log::info!("Engine main thread exiting");
+        tracing::info!("Engine main thread exiting");
     }
-    
+
     r
 }
 
@@ -135,10 +130,18 @@ fn engine_main_thread_inner(
     let workdir = std::env::current_dir().unwrap();
     let workdir = workdir.to_string_lossy();
     if db_path.exists() {
-        log::debug!("Loading opening db from {} in {}", db_path.to_string_lossy(), workdir);
+        tracing::debug!(
+            "Loading opening db from {} in {}",
+            db_path.to_string_lossy(),
+            workdir
+        );
         engine.load_opening_db(Path::new("./opening_db.dat"))?;
-    } else{
-        log::debug!("Couldn't find opening db at {} in {}, proceeding without", db_path.to_string_lossy(), workdir);
+    } else {
+        tracing::debug!(
+            "Couldn't find opening db at {} in {}, proceeding without",
+            db_path.to_string_lossy(),
+            workdir
+        );
     }
 
     for cmd in cmd_rx {
@@ -159,9 +162,9 @@ fn engine_main_thread_inner(
                 ) {
                     Ok(m) => m,
                     Err(EngineError::EarlyStop) => {
-                        log::warn!("Search stop was requested before the first move was found");
+                        tracing::warn!("Search stop was requested before the first move was found");
                         continue;
-                    },
+                    }
                     other => other?,
                 };
 

@@ -121,7 +121,7 @@ impl Engine {
             };
 
             if let Some(book_move) = book_move {
-                log::info!("Responding with book move: {}", book_move);
+                tracing::info!("Responding with book move: {}", book_move);
                 return Ok(book_move);
             }
         }

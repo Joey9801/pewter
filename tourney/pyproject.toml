@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "tourney"
+version = "0.1.0"
+description = ""
+authors = ["Joe Roberts <josephroberts11@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pydantic = "^2.9.2"
+chess = "^1.11.1"
+
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.28.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

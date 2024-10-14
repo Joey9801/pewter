@@ -42,12 +42,13 @@ class EngineDef(BaseModel):
 
 
 class EndingType(enum.StrEnum):
-    CHECKMATE="Checkmate"
-    STALEMATE="Stalemate"
-    FIVEFOLD_REP="Fivefold repetition"
-    INSUFFICIENT_MAT="Insufficient material"
-    SEVENTY_FIVE_MOVE="Seventy-five move rule"
-    UNKNOWN="Unknown"
+    CHECKMATE = "Checkmate"
+    STALEMATE = "Stalemate"
+    FIVEFOLD_REP = "Fivefold repetition"
+    INSUFFICIENT_MAT = "Insufficient material"
+    SEVENTY_FIVE_MOVE = "Seventy-five move rule"
+    UNKNOWN = "Unknown"
+
 
 CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS ending_types (
@@ -94,13 +95,15 @@ def insert_ending_types(db_path: Path):
             "INSERT OR IGNORE INTO ending_types (name) VALUES (?)", (str(ending),)
         )
     conn.commit()
-    
+
+
 def get_ending_type_id(db_path: Path, ending: EndingType) -> int:
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
-    cur.execute("SELECT id FROM ending_types WHERE name = (?)", (str(ending), ))
-    
+    cur.execute("SELECT id FROM ending_types WHERE name = (?)", (str(ending),))
+
     return cur.fetchone()[0]
+
 
 # Compute checksum (MD5) for the engine binary
 def compute_checksum(file_path: Path) -> str:
@@ -111,14 +114,45 @@ def compute_checksum(file_path: Path) -> str:
     return hash_md5.hexdigest()
 
 
-# Insert engine into the database
-def insert_engine(db_path: Path, engine_def: EngineDef) -> int:
+def _get_engine(conn: sqlite3.Connection, engine_def: EngineDef) -> int | None:
+    checksum = compute_checksum(engine_def.path)
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT id FROM engines WHERE name = ? and path = ? and checksum = ?",
+        (engine_def.name, str(engine_def.path), checksum),
+    )
+
+    # The set of engines with the right name/path/checksum
+    candidates = (row[0] for row in cur.fetchmany())
+
+    def check_options(engine_id: int) -> bool:
+        """Does the given engine id have exactly the right options"""
+
+        cur.execute(
+            "SELECT option_name, option_value FROM engine_options WHERE engine_id = ?",
+            (engine_id,),
+        )
+        db_options = dict(cur.fetchmany())
+        def_options = {k: str(v) for k, v in engine_def.options.items()}
+        return db_options == def_options
+
+    candidates = list(filter(check_options, candidates))
+
+    if len(candidates) == 0:
+        return None
+    elif len(candidates) == 1:
+        return candidates[0]
+    else:
+        msg = f"Found multiple identical engines in DB: {candidates}"
+        raise RuntimeError(msg)
+
+
+def _insert_engine(conn: sqlite3.Connection, engine_def: EngineDef) -> int:
     checksum = compute_checksum(engine_def.path)
 
-    # TODO: Check whether the engine is already in the db before creating it new
-
-    conn = sqlite3.connect(db_path)
     cur = conn.cursor()
+
     cur.execute(
         "INSERT OR IGNORE INTO engines (name, path, checksum) VALUES (?, ?, ?)",
         (engine_def.name, str(engine_def.path), checksum),
@@ -137,6 +171,16 @@ def insert_engine(db_path: Path, engine_def: EngineDef) -> int:
             "INSERT INTO engine_options (engine_id, option_name, option_value) VALUES (?, ?, ?)",
             (engine_id, option_name, str(option_value)),
         )
+
+    return engine_id
+
+
+# Insert engine into the database
+def get_or_insert_engine(db_path: Path, engine_def: EngineDef) -> int:
+    conn = sqlite3.connect(db_path)
+
+    engine_id = _get_engine(conn, engine_def) or _insert_engine(conn, engine_def)
+
     conn.commit()
     conn.close()
 
@@ -297,10 +341,10 @@ def main():
     insert_ending_types(args.db_path)
 
     engine1_def = EngineDef.read(args.engine1_def)
-    engine1_id = insert_engine(args.db_path, engine1_def)
+    engine1_id = get_or_insert_engine(args.db_path, engine1_def)
 
     engine2_def = EngineDef.read(args.engine2_def)
-    engine2_id = insert_engine(args.db_path, engine2_def)
+    engine2_id = get_or_insert_engine(args.db_path, engine2_def)
 
     # Prepare arguments for each process
     num_cores = multiprocessing.cpu_count()
@@ -308,7 +352,9 @@ def main():
     jobs = []
 
     if args.num_games % 2 != 0:
-        print(f"Warn: odd number of games requesting, actually running {half_games} games per side")
+        print(
+            f"Warn: odd number of games requesting, actually running {half_games} games per side"
+        )
 
     for i in range(half_games):
         jobs.append(

@@ -33,6 +33,9 @@ pub struct Timings {
 
     /// The amount of extra time black will get after making the next move
     pub black_increment: Duration,
+    
+    /// Request from the engine host to spend exactly this much time on the next move
+    pub move_time: Option<Duration>,
 }
 
 #[derive(Clone, Debug)]
@@ -129,6 +132,6 @@ impl Engine {
         let timings = timings.unwrap_or(Timings::default());
         
         let mut searcher = Searcher::new(controls);
-        searcher.search(state, max_depth.unwrap_or(6), timings, infinite)
+        searcher.search(state, max_depth.unwrap_or(10), timings, infinite)
     }
 }

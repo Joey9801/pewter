@@ -1,12 +1,15 @@
-use std::{sync::{Arc, atomic::{AtomicBool, Ordering}}, time::{Instant, Duration}};
 use std::fmt::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crossbeam_channel::Sender;
 
-use pewter_core::{State, Move, movegen::legal_moves, Color};
 use crate::engine::ordering::order_moves;
+use pewter_core::{movegen::legal_moves, Color, Move, State};
 
-use super::{eval, PerfInfo, EngineError, Evaluation, transposition::{TranspositionTable, NodeType}, Timings};
+use super::transposition::{NodeType, TranspositionTable};
+use super::{eval, EngineError, Evaluation, PerfInfo, Timings};
 
 #[derive(Clone, Debug)]
 pub struct SearchControls {
@@ -20,14 +23,14 @@ pub struct SearchControls {
 #[derive(Clone, Debug)]
 pub enum MoveChain {
     Terminal(Move),
-    NonTerminal(Move, Box<MoveChain>)
+    NonTerminal(Move, Box<MoveChain>),
 }
 
 impl MoveChain {
     fn iter(&self) -> MoveChainIter {
         MoveChainIter { curr: Some(self) }
     }
-    
+
     fn first(&self) -> Move {
         match self {
             MoveChain::Terminal(m) => *m,
@@ -54,7 +57,7 @@ impl<'a> Iterator for MoveChainIter<'a> {
             Some(MoveChain::NonTerminal(_, next)) => Some(next),
             _ => None,
         };
-        
+
         m
     }
 }
@@ -72,28 +75,27 @@ impl Variation {
     pub fn format(&self) -> String {
         let mut out = String::new();
         for m in self.moves.iter() {
-            write!(out, " {}", m)
-                .expect("write!() to a String failed");
+            write!(out, " {}", m).expect("write!() to a String failed");
         }
-        
+
         out
     }
 }
 
 pub struct Searcher {
     controls: SearchControls,
-    
+
     /// Instant that the last call to self.search was made
     last_search_start: Instant,
-    
+
     /// Instant that the last performance info message was emitted
     last_perf_info: Instant,
-    
+
     /// The number of visited nodes that weren't transposition table hits
     nodes_searched: u64,
-    
+
     t_table: TranspositionTable,
-    
+
     principal_variation: Option<Variation>,
 }
 
@@ -104,10 +106,7 @@ struct SearchResult {
 
 impl SearchResult {
     fn just_eval(eval: Evaluation) -> Self {
-        Self {
-            eval,
-            pv: None,
-        }
+        Self { eval, pv: None }
     }
 }
 
@@ -122,19 +121,29 @@ impl Searcher {
             principal_variation: None,
         }
     }
-    
-    pub fn search(&mut self, state: &State, max_depth: u8, timings: Timings, infinite: bool) -> Result<Move, EngineError> {
+
+    pub fn search(
+        &mut self,
+        state: &State,
+        max_depth: u8,
+        timings: Timings,
+        infinite: bool,
+    ) -> Result<Move, EngineError> {
         self.last_search_start = Instant::now();
         self.last_perf_info = Instant::now();
         self.principal_variation = None;
-        
-        let remaining = match state.to_play {
-            Color::White => timings.white_remaining,
-            Color::Black => timings.black_remaining,
-        }.unwrap_or(Duration::from_secs(60));
 
-        let time_heuristic = std::cmp::min(remaining / 10, Duration::from_millis(250));
-        
+        let time_heuristic = {
+            let remaining = match state.to_play {
+                Color::White => timings.white_remaining,
+                Color::Black => timings.black_remaining,
+            }
+            .unwrap_or(Duration::from_secs(60));
+            let this_move = timings.move_time.unwrap_or(Duration::from_millis(250));
+
+            std::cmp::min(remaining / 10, this_move)
+        };
+
         let mut last_pv = None;
         for depth in 1.. {
             if !infinite && depth >= max_depth {
@@ -146,7 +155,7 @@ impl Searcher {
                 tracing::debug!("Stopping search because of time heuristic");
                 break;
             }
-            
+
             if self.controls.stop.load(Ordering::Relaxed) {
                 tracing::debug!("Stopping search because stop signal recieved");
                 break;
@@ -166,12 +175,12 @@ impl Searcher {
             let last_pv = last_pv
                 .as_ref()
                 .expect("Search concluded without a principal variation");
-            
+
             tracing::info!("Searched depth {}, pv {}", depth, last_pv.format());
         }
 
         self.emit_perf_msg()?;
-        
+
         if self.controls.stop.load(Ordering::Relaxed) {
             Err(EngineError::EarlyStop)
         } else {
@@ -180,7 +189,7 @@ impl Searcher {
                 .ok_or(EngineError::NoMoves)
         }
     }
-    
+
     fn search_moves(
         &mut self,
         state: &State,
@@ -197,20 +206,18 @@ impl Searcher {
         }
 
         let depth_remaining = max_depth - ply_from_root;
-        
+
         // First, check the transposition table in case we've been here before
         if let Some(tt) = self.t_table.probe(state, depth_remaining, alpha, beta) {
             return Ok(SearchResult {
                 eval: tt.node_value,
-                
+
                 // TODO: Store+export PV in transposition table for Exact nodes
                 pv: None,
             });
         }
 
-        let mut moves = legal_moves(state)
-            .iter()
-            .collect::<Vec<Move>>();
+        let mut moves = legal_moves(state).iter().collect::<Vec<Move>>();
 
         order_moves(state, &mut moves, &self.t_table);
 
@@ -218,10 +225,9 @@ impl Searcher {
             if state.in_check() {
                 return Ok(SearchResult::just_eval(eval::consts::MATE));
             } else {
-                return Ok(SearchResult::just_eval(eval::consts::DRAW))
+                return Ok(SearchResult::just_eval(eval::consts::DRAW));
             }
         }
-
 
         let mut best_move = None;
         let mut node_type = NodeType::UpperBound;
@@ -229,13 +235,8 @@ impl Searcher {
 
         for m in moves {
             let new_state = state.apply_move(m);
-            let result = self.search_moves(
-                &new_state, 
-                ply_from_root + 1,
-                max_depth,
-                -beta,
-                -alpha
-            )?;
+            let result =
+                self.search_moves(&new_state, ply_from_root + 1, max_depth, -beta, -alpha)?;
 
             let score = -result.eval;
 
@@ -243,7 +244,8 @@ impl Searcher {
             // first place
             if score >= beta {
                 // TODO: Should the inserted node value be `score` rather than `beta`?
-                self.t_table.insert(state, depth_remaining, beta, NodeType::LowerBound, None);
+                self.t_table
+                    .insert(state, depth_remaining, beta, NodeType::LowerBound, None);
                 return Ok(SearchResult::just_eval(beta));
             }
 
@@ -251,7 +253,7 @@ impl Searcher {
                 node_type = NodeType::Exact;
                 best_move = Some(m);
                 alpha = score;
-                
+
                 pv = Some(Variation {
                     moves: match result.pv {
                         Some(pv) => MoveChain::NonTerminal(m, Box::new(pv.moves)),
@@ -260,51 +262,54 @@ impl Searcher {
                     eval: alpha,
                 });
             }
-            
+
             self.maybe_emit_perf_msg(ply_from_root, max_depth)?;
             if self.should_stop(ply_from_root, max_depth) {
-                break
+                break;
             }
         }
-        
-        self.t_table.insert(state, depth_remaining, alpha, node_type, best_move);
-        
-        Ok(SearchResult {
-            eval: alpha,
-            pv,
-        })
+
+        self.t_table
+            .insert(state, depth_remaining, alpha, node_type, best_move);
+
+        Ok(SearchResult { eval: alpha, pv })
     }
-    
-    fn quiescence_search(&mut self, state: &State, alpha: Evaluation, beta: Evaluation) -> Evaluation {
+
+    fn quiescence_search(
+        &mut self,
+        state: &State,
+        alpha: Evaluation,
+        beta: Evaluation,
+    ) -> Evaluation {
         let root_eval = eval::evaluate(state);
         if root_eval >= beta {
             return beta;
         }
         let mut alpha = std::cmp::max(alpha, root_eval);
-        
+
         fn move_is_capture(state: &State, m: Move) -> bool {
             state.board.color_board(!state.to_play).get(m.to)
         }
-        
+
         let mut moves = legal_moves(state)
             .iter()
             .filter(|m| move_is_capture(state, *m))
             .collect::<Vec<Move>>();
         order_moves(state, &mut moves, &self.t_table);
-        
+
         for m in moves {
             let new_state = state.apply_move(m);
             let score = -self.quiescence_search(&new_state, -beta, -alpha);
             if score >= beta {
                 return beta;
             }
-            
+
             alpha = std::cmp::max(alpha, score);
         }
-        
+
         alpha
     }
-    
+
     #[inline(always)]
     fn should_stop(&mut self, ply_from_root: u8, max_depth: u8) -> bool {
         if max_depth - ply_from_root >= 4 {
@@ -314,9 +319,8 @@ impl Searcher {
         } else {
             false
         }
-
     }
-    
+
     #[inline(always)]
     fn maybe_emit_perf_msg(&mut self, ply_from_root: u8, max_depth: u8) -> Result<(), EngineError> {
         if max_depth - ply_from_root >= 4 {
@@ -324,10 +328,10 @@ impl Searcher {
                 self.emit_perf_msg()?;
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn emit_perf_msg(&mut self) -> Result<(), EngineError> {
         if let Some(perf_sender) = &self.controls.perf_info {
             perf_sender.send(PerfInfo {
@@ -340,7 +344,7 @@ impl Searcher {
             })?;
         }
         self.last_perf_info = Instant::now();
-        
+
         Ok(())
     }
 }

@@ -111,6 +111,7 @@ fn handle_uci_cmd(
                 black_remaining: go.black_time,
                 white_increment: go.white_increment.unwrap_or(Duration::ZERO),
                 black_increment: go.black_increment.unwrap_or(Duration::ZERO),
+                move_time: go.move_time,
             };
 
             engine.begin_search(go.infinite, go.depth, go.nodes, Some(timings))?;

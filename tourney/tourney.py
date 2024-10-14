@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+from datetime import datetime, timedelta, timezone
 import enum
 import multiprocessing
 import sqlite3
@@ -47,7 +48,32 @@ class EndingType(enum.StrEnum):
     FIVEFOLD_REP = "Fivefold repetition"
     INSUFFICIENT_MAT = "Insufficient material"
     SEVENTY_FIVE_MOVE = "Seventy-five move rule"
+    CLOCK = "Clock ran out"
     UNKNOWN = "Unknown"
+
+
+class ChessClock:
+    remaining: timedelta
+    started_at: datetime | None
+
+    def __init__(self, starting: timedelta):
+        self.remaining = starting
+        self.started_at = None
+
+    @property
+    def remaining_seconds(self) -> float:
+        return self.remaining.total_seconds()
+
+    def start(self):
+        assert self.started_at is None
+        self.started_at = datetime.now(tz=timezone.utc)
+
+    def stop(self):
+        assert self.started_at is not None
+        now = datetime.now(tz=timezone.utc)
+        diff = now - self.started_at
+        self.remaining -= diff
+        self.started_at = None
 
 
 CREATE_TABLES_SQL = """
@@ -226,15 +252,13 @@ def play_game(
         white_engine_def.path, env=white_engine_def.env
     )
     white_engine.configure(white_engine_def.options)
+    white_clock = ChessClock(timedelta(minutes=1))
 
     black_engine = chess.engine.SimpleEngine.popen_uci(
         black_engine_def.path, env=black_engine_def.env
     )
     black_engine.configure(black_engine_def.options)
-
-    # TODO: Set up a proper persistent clock for each side, this value ends up
-    # just being a hint to the engine with no penalty for ignoring
-    per_move_time_limit = 0.1
+    black_clock = ChessClock(timedelta(minutes=1))
 
     board = chess.Board()
     pgn = chess.pgn.Game()
@@ -246,13 +270,20 @@ def play_game(
         # TODO: Add game lose condition for running out of clock
         while not board.is_game_over():
             if board.turn == chess.WHITE:
-                result = white_engine.play(
-                    board, chess.engine.Limit(time=per_move_time_limit)
-                )
+                engine, clock = white_engine, white_clock
             else:
-                result = black_engine.play(
-                    board, chess.engine.Limit(time=per_move_time_limit)
-                )
+                engine, clock = black_engine, black_clock
+
+            limit = chess.engine.Limit(
+                white_clock=white_clock.remaining_seconds,
+                black_clock=black_clock.remaining_seconds,
+            )
+            clock.start()
+            result = engine.play(board, limit=limit)
+            clock.stop()
+
+            if clock.remaining_seconds < 0:
+                break
 
             pgn = pgn.add_main_variation(result.move)
             board.push(result.move)
@@ -261,6 +292,12 @@ def play_game(
         if board.is_checkmate():
             white_score, black_score = (0, 1) if board.turn == chess.WHITE else (1, 0)
             ending_type = EndingType.CHECKMATE
+        elif black_clock.remaining_seconds < 0:
+            white_score, black_score = (1, 0)
+            ending_type = EndingType.CLOCK
+        elif white_clock.remaining_seconds < 0:
+            white_score, black_score = (0, 1)
+            ending_type = EndingType.CLOCK
         elif board.is_stalemate():
             white_score, black_score = 0.5, 0.5
             ending_type = EndingType.STALEMATE
@@ -347,7 +384,6 @@ def main():
     engine2_id = get_or_insert_engine(args.db_path, engine2_def)
 
     # Prepare arguments for each process
-    num_cores = multiprocessing.cpu_count()
     half_games = args.num_games // 2
     jobs = []
 
@@ -365,7 +401,7 @@ def main():
         )  # Engine2 as White
 
     # Run games in parallel using multiprocessing with progress bar
-    with Pool(num_cores) as pool:
+    with Pool(args.concurrency) as pool:
         # for _ in tqdm(
         #     pool.imap_unordered(play_games_parallel, jobs),
         #     total=len(jobs),

@@ -13,7 +13,7 @@ import chess
 import chess.engine
 import chess.pgn
 from pydantic import BaseModel
-# from tqdm import tqdm
+from tqdm import tqdm
 
 
 ConfigValue = str | bool | int | None
@@ -336,6 +336,77 @@ def play_games_parallel(args: dict[str, any]):
     play_game(*args)
 
 
+def print_summary(db_path: Path, engine1_id: int, engine2_id: int):
+    """Print a summary of all the games in the DB between the given two engines"""
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    cur.execute(
+        "select id, name from engines where id in (?, ?)", (engine1_id, engine2_id)
+    )
+    engine_names = dict(cur.fetchall())
+
+    def print_row(games):
+        # Eg:
+        #    25 wins, 10 draws, 15 losses (50% / 20% / 30%)
+        wins = draws = losses = 0
+        for white_id, black_id, white_score, black_score, _ in games:
+            if white_id == engine1_id:
+                if white_score > black_score:
+                    wins += 1
+                elif white_score < black_score:
+                    losses += 1
+                else:
+                    draws += 1
+            else:
+                if white_score < black_score:
+                    wins += 1
+                elif white_score > black_score:
+                    losses += 1
+                else:
+                    draws += 1
+
+        total = wins + draws + losses
+        
+        if total == 0:
+            return
+        
+        win_pct = wins / total * 100
+        draw_pct = draws / total * 100
+        loss_pct = losses / total * 100
+
+        print(
+            f"       {total:>4} games: {wins:>4} wins, {draws:>4} draws, {losses:>4} losses ({win_pct:.1f}% / {draw_pct:.1f}% / {loss_pct:.1f}%)"
+        )
+        
+    cur.execute(
+        """
+        select
+            white_engine_id,
+            black_engine_id,
+            white_score,
+            black_score,
+            ending_types.name
+        from games
+        join ending_types on games.ending_type_id = ending_types.id
+        where white_engine_id in (?, ?) and black_engine_id in (?, ?)
+    """,
+        (engine1_id, engine2_id, engine1_id, engine2_id),
+    )
+    
+    games = cur.fetchall()
+
+    print(f"Summary of games between {engine_names[engine1_id]} and {engine_names[engine2_id]}:")
+    print("    All games:")
+    print_row(games)
+    
+    print("    Games as White:")
+    print_row(filter(lambda g: g[0] == engine1_id, games))
+
+    print("    Games as Black:")
+    print_row(filter(lambda g: g[1] == engine1_id, games))
+        
 def main():
     parser = argparse.ArgumentParser(
         description="Run chess engines against each other using UCI."
@@ -402,16 +473,14 @@ def main():
 
     # Run games in parallel using multiprocessing with progress bar
     with Pool(args.concurrency) as pool:
-        # for _ in tqdm(
-        #     pool.imap_unordered(play_games_parallel, jobs),
-        #     total=len(jobs),
-        #     desc="Running games",
-        # ):
-        #     pass
+        for _ in tqdm(
+            pool.imap_unordered(play_games_parallel, jobs),
+            total=len(jobs),
+            desc="Running games",
+        ):
+            pass
 
-        for i, _ in enumerate(pool.imap_unordered(play_games_parallel, jobs)):
-            print(f"Finished game {i + 1}/{len(jobs)}")
-
+    print_summary(args.db_path, engine1_id, engine2_id)
 
 if __name__ == "__main__":
     main()

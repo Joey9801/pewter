@@ -255,6 +255,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "chess" },
     { name = "pydantic" },
+    { name = "tqdm" },
 ]
 
 [package.dev-dependencies]
@@ -266,10 +267,23 @@ dev = [
 requires-dist = [
     { name = "chess", specifier = ">=1.11.1" },
     { name = "pydantic", specifier = ">=2.9.2" },
+    { name = "tqdm", specifier = ">=4.66.5" },
 ]
 
 [package.metadata.requires-dev]
 dev = [{ name = "ipython", specifier = ">=8.28.0" }]
+
+[[package]]
+name = "tqdm"
+version = "4.66.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "platform_system == 'Windows'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/58/83/6ba9844a41128c62e810fddddd72473201f3eacde02046066142a2d96cc5/tqdm-4.66.5.tar.gz", hash = "sha256:e1020aef2e5096702d8a025ac7d16b1577279c9d63f8375b63083e9a5f0fcbad", size = 169504 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/48/5d/acf5905c36149bbaec41ccf7f2b68814647347b72075ac0b1fe3022fdc73/tqdm-4.66.5-py3-none-any.whl", hash = "sha256:90279a3770753eafc9194a0364852159802111925aa30eb3f9d85b0e805ac7cd", size = 78351 },
+]
 
 [[package]]
 name = "traitlets"

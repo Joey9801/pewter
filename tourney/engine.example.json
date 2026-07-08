@@ -1,0 +1,6 @@
+{
+    "name": "pewter",
+    "path": "../target/release/pewter-engine",
+    "options": {},
+    "env": {}
+}

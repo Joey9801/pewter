@@ -4,6 +4,7 @@ import argparse
 import hashlib
 from datetime import datetime, timedelta, timezone
 import enum
+import math
 import multiprocessing
 import sqlite3
 from multiprocessing import Pool
@@ -54,15 +55,21 @@ class EndingType(enum.StrEnum):
 
 class ChessClock:
     remaining: timedelta
+    increment: timedelta
     started_at: datetime | None
 
-    def __init__(self, starting: timedelta):
+    def __init__(self, starting: timedelta, increment: timedelta = timedelta(0)):
         self.remaining = starting
+        self.increment = increment
         self.started_at = None
 
     @property
     def remaining_seconds(self) -> float:
         return self.remaining.total_seconds()
+
+    @property
+    def increment_seconds(self) -> float:
+        return self.increment.total_seconds()
 
     def start(self):
         assert self.started_at is None
@@ -74,6 +81,102 @@ class ChessClock:
         diff = now - self.started_at
         self.remaining -= diff
         self.started_at = None
+
+    def add_increment(self):
+        """Apply the Fischer increment after a completed (non-flagging) move."""
+        self.remaining += self.increment
+
+
+class TimeControl(BaseModel):
+    """A sudden-death or Fischer time control, per side."""
+
+    base: timedelta
+    increment: timedelta
+
+    @classmethod
+    def parse(cls, spec: str) -> "TimeControl":
+        """Parse a "base[+increment]" spec, in seconds. Eg "60", "60+1", "90+0.5"."""
+        spec = spec.strip()
+        if "+" in spec:
+            base_str, inc_str = spec.split("+", 1)
+        else:
+            base_str, inc_str = spec, "0"
+
+        try:
+            base = float(base_str)
+            increment = float(inc_str)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid time control {spec!r}, expected 'base[+increment]' in seconds"
+            ) from e
+
+        if base <= 0:
+            raise ValueError(f"Time control base must be positive, got {base}")
+        if increment < 0:
+            raise ValueError(f"Time control increment must be non-negative, got {increment}")
+
+        return cls(
+            base=timedelta(seconds=base),
+            increment=timedelta(seconds=increment),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.base.total_seconds():g}+{self.increment.total_seconds():g}"
+
+
+class Opening(BaseModel):
+    """A named opening line, given as the moves to play out from the start position."""
+
+    name: str
+    moves: list[str]
+    """The opening moves, in UCI long-algebraic notation."""
+
+
+def load_openings(path: Path) -> list[Opening]:
+    """Load opening lines from a text file.
+
+    Each non-empty, non-comment (``#``) line describes one opening. The optional
+    text before a ``|`` names the opening; the remainder is a sequence of
+    space-separated moves in SAN (eg ``e4 e5 Nf3 Nc6``). Moves are validated and
+    normalised to UCI as they are loaded, so a malformed line fails fast with a
+    pointer to the offending line.
+    """
+
+    openings: list[Opening] = []
+    for lineno, raw in enumerate(path.read_text().splitlines(), start=1):
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+
+        if "|" in line:
+            name, moves_str = line.split("|", 1)
+            name = name.strip()
+        else:
+            name, moves_str = "", line
+
+        board = chess.Board()
+        uci_moves: list[str] = []
+        for token in moves_str.split():
+            try:
+                move = board.push_san(token)
+            except ValueError as e:
+                raise ValueError(
+                    f"{path}:{lineno}: could not parse move {token!r} in opening line: {e}"
+                ) from e
+            uci_moves.append(move.uci())
+
+        if not uci_moves:
+            raise ValueError(f"{path}:{lineno}: opening line has no moves")
+
+        openings.append(Opening(name=name or f"Opening {len(openings) + 1}", moves=uci_moves))
+
+    if not openings:
+        raise ValueError(f"No openings found in {path}")
+
+    return openings
+
+
+DEFAULT_OPENINGS_PATH = Path(__file__).parent / "openings.txt"
 
 
 CREATE_TABLES_SQL = """
@@ -247,27 +350,36 @@ def play_game(
     white_engine_id: int,
     black_engine_def: EngineDef,
     black_engine_id: int,
+    time_control: TimeControl,
+    opening: Opening,
 ):
     white_engine = chess.engine.SimpleEngine.popen_uci(
         white_engine_def.path, env=white_engine_def.env
     )
     white_engine.configure(white_engine_def.options)
-    white_clock = ChessClock(timedelta(minutes=1))
+    white_clock = ChessClock(time_control.base, time_control.increment)
 
     black_engine = chess.engine.SimpleEngine.popen_uci(
         black_engine_def.path, env=black_engine_def.env
     )
     black_engine.configure(black_engine_def.options)
-    black_clock = ChessClock(timedelta(minutes=1))
+    black_clock = ChessClock(time_control.base, time_control.increment)
 
     board = chess.Board()
     pgn = chess.pgn.Game()
 
     pgn.headers["White"] = f"{white_engine_def.name} (id: {white_engine_id})"
     pgn.headers["Black"] = f"{black_engine_def.name} (id: {black_engine_id})"
+    pgn.headers["Opening"] = opening.name
+
+    # Play out the opening line as un-timed "book" moves so that otherwise
+    # deterministic engines produce a variety of games.
+    for uci in opening.moves:
+        move = chess.Move.from_uci(uci)
+        pgn = pgn.add_main_variation(move)
+        board.push(move)
 
     with white_engine, black_engine:
-        # TODO: Add game lose condition for running out of clock
         while not board.is_game_over():
             if board.turn == chess.WHITE:
                 engine, clock = white_engine, white_clock
@@ -277,6 +389,8 @@ def play_game(
             limit = chess.engine.Limit(
                 white_clock=white_clock.remaining_seconds,
                 black_clock=black_clock.remaining_seconds,
+                white_inc=white_clock.increment_seconds,
+                black_inc=black_clock.increment_seconds,
             )
             clock.start()
             result = engine.play(board, limit=limit)
@@ -284,6 +398,8 @@ def play_game(
 
             if clock.remaining_seconds < 0:
                 break
+
+            clock.add_increment()
 
             pgn = pgn.add_main_variation(result.move)
             board.push(result.move)
@@ -336,6 +452,49 @@ def play_games_parallel(args: dict[str, any]):
     play_game(*args)
 
 
+def elo_diff_and_ci(
+    wins: int, draws: int, losses: int
+) -> tuple[float, float, float]:
+    """Estimate the Elo difference and a 95% confidence interval from a match result.
+
+    Returns (elo, lower, upper) from the perspective of the engine that scored
+    ``wins``/``draws``/``losses``. Bounds may be +/-inf for a clean sweep.
+    """
+
+    n = wins + draws + losses
+    score = (wins + 0.5 * draws) / n
+
+    # Standard error of the mean score, treating each game's score as a sample.
+    win_p, draw_p, loss_p = wins / n, draws / n, losses / n
+    variance = (
+        win_p * (1 - score) ** 2
+        + draw_p * (0.5 - score) ** 2
+        + loss_p * (0 - score) ** 2
+    )
+    stderr = math.sqrt(variance / n)
+
+    def score_to_elo(x: float) -> float:
+        if x <= 0:
+            return float("-inf")
+        if x >= 1:
+            return float("inf")
+        return -400 * math.log10(1 / x - 1)
+
+    return (
+        score_to_elo(score),
+        score_to_elo(score - 1.96 * stderr),
+        score_to_elo(score + 1.96 * stderr),
+    )
+
+
+def likelihood_of_superiority(wins: int, losses: int) -> float:
+    """The probability that the engine is genuinely stronger, given decisive games."""
+
+    if wins + losses == 0:
+        return 0.5
+    return 0.5 * (1 + math.erf((wins - losses) / math.sqrt(2 * (wins + losses))))
+
+
 def print_summary(db_path: Path, engine1_id: int, engine2_id: int):
     """Print a summary of all the games in the DB between the given two engines"""
 
@@ -347,9 +506,7 @@ def print_summary(db_path: Path, engine1_id: int, engine2_id: int):
     )
     engine_names = dict(cur.fetchall())
 
-    def print_row(games):
-        # Eg:
-        #    25 wins, 10 draws, 15 losses (50% / 20% / 30%)
+    def tally(games) -> tuple[int, int, int]:
         wins = draws = losses = 0
         for white_id, black_id, white_score, black_score, _ in games:
             if white_id == engine1_id:
@@ -366,12 +523,18 @@ def print_summary(db_path: Path, engine1_id: int, engine2_id: int):
                     losses += 1
                 else:
                     draws += 1
+        return wins, draws, losses
+
+    def print_row(games, stats: bool = False):
+        # Eg:
+        #    25 wins, 10 draws, 15 losses (50% / 20% / 30%)
+        wins, draws, losses = tally(games)
 
         total = wins + draws + losses
-        
+
         if total == 0:
             return
-        
+
         win_pct = wins / total * 100
         draw_pct = draws / total * 100
         loss_pct = losses / total * 100
@@ -379,7 +542,15 @@ def print_summary(db_path: Path, engine1_id: int, engine2_id: int):
         print(
             f"       {total:>4} games: {wins:>4} wins, {draws:>4} draws, {losses:>4} losses ({win_pct:.1f}% / {draw_pct:.1f}% / {loss_pct:.1f}%)"
         )
-        
+
+        if stats:
+            elo, lo, hi = elo_diff_and_ci(wins, draws, losses)
+            los = likelihood_of_superiority(wins, losses)
+            print(
+                f"                  Elo: {elo:+.1f} [{lo:+.1f}, {hi:+.1f}] (95% CI), "
+                f"LOS: {los * 100:.1f}%"
+            )
+
     cur.execute(
         """
         select
@@ -397,16 +568,19 @@ def print_summary(db_path: Path, engine1_id: int, engine2_id: int):
     
     games = cur.fetchall()
 
-    print(f"Summary of games between {engine_names[engine1_id]} and {engine_names[engine2_id]}:")
+    print(
+        f"Summary of games between {engine_names[engine1_id]} and "
+        f"{engine_names[engine2_id]} (from {engine_names[engine1_id]}'s perspective):"
+    )
     print("    All games:")
-    print_row(games)
-    
+    print_row(list(games), stats=True)
+
     print("    Games as White:")
     print_row(filter(lambda g: g[0] == engine1_id, games))
 
     print("    Games as Black:")
     print_row(filter(lambda g: g[1] == engine1_id, games))
-        
+
 def main():
     parser = argparse.ArgumentParser(
         description="Run chess engines against each other using UCI."
@@ -435,8 +609,22 @@ def main():
     parser.add_argument(
         "--db-path", default="tourney.db", help="SQLite database file to store results."
     )
+    parser.add_argument(
+        "--tc",
+        type=TimeControl.parse,
+        default=TimeControl.parse("60+0"),
+        help="Time control per side as 'base[+increment]' in seconds (default: 60+0).",
+    )
+    parser.add_argument(
+        "--openings",
+        type=Path,
+        default=DEFAULT_OPENINGS_PATH,
+        help="File of opening lines to vary games (default: bundled openings.txt).",
+    )
 
     args = parser.parse_args()
+
+    openings = load_openings(args.openings)
 
     # Setup SQLite database
     conn = sqlite3.connect(args.db_path)
@@ -463,12 +651,21 @@ def main():
             f"Warn: odd number of games requesting, actually running {half_games} games per side"
         )
 
+    if half_games > len(openings):
+        print(
+            f"Warn: only {len(openings)} openings available for {half_games} game pairs; "
+            "openings will repeat, so some games will be identical for deterministic engines"
+        )
+
+    # Each opening is played once with each engine as White, so the two engines
+    # face the same positions with colours reversed.
     for i in range(half_games):
+        opening = openings[i % len(openings)]
         jobs.append(
-            (args.db_path, engine1_def, engine1_id, engine2_def, engine2_id)
+            (args.db_path, engine1_def, engine1_id, engine2_def, engine2_id, args.tc, opening)
         )  # Engine1 as White
         jobs.append(
-            (args.db_path, engine2_def, engine2_id, engine1_def, engine1_id)
+            (args.db_path, engine2_def, engine2_id, engine1_def, engine1_id, args.tc, opening)
         )  # Engine2 as White
 
     # Run games in parallel using multiprocessing with progress bar

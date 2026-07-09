@@ -125,7 +125,11 @@ class TimeControl(BaseModel):
 
 
 class Opening(BaseModel):
-    """A named opening line, given as the moves to play out from the start position."""
+    """A named opening line, given as the moves to play out from the start position.
+
+    An empty ``moves`` list means the game simply starts from the standard
+    position, which is the default when no openings file is supplied.
+    """
 
     name: str
     moves: list[str]
@@ -372,8 +376,10 @@ def play_game(
     pgn.headers["Black"] = f"{black_engine_def.name} (id: {black_engine_id})"
     pgn.headers["Opening"] = opening.name
 
-    # Play out the opening line as un-timed "book" moves so that otherwise
-    # deterministic engines produce a variety of games.
+    # Play out any opening line as un-timed "book" moves so that otherwise
+    # deterministic engines produce a variety of games. This is empty in the
+    # default configuration, where games start from the standard position and
+    # variety comes from engine non-determinism instead.
     for uci in opening.moves:
         move = chess.Move.from_uci(uci)
         pgn = pgn.add_main_variation(move)
@@ -618,13 +624,25 @@ def main():
     parser.add_argument(
         "--openings",
         type=Path,
-        default=DEFAULT_OPENINGS_PATH,
-        help="File of opening lines to vary games (default: bundled openings.txt).",
+        default=None,
+        help=(
+            "Optional file of opening lines to vary games. If omitted, every "
+            "game starts from the standard position and variety must come from "
+            "engine non-determinism (e.g. the Wobble UCI option). Pass "
+            f"'{DEFAULT_OPENINGS_PATH.name}' for the bundled set."
+        ),
     )
 
     args = parser.parse_args()
 
-    openings = load_openings(args.openings)
+    if args.openings is None:
+        # No openings file: play every game from the standard start position and
+        # rely on the engines themselves to vary the games.
+        openings = [Opening(name="Startpos", moves=[])]
+        using_openings_file = False
+    else:
+        openings = load_openings(args.openings)
+        using_openings_file = True
 
     # Setup SQLite database
     conn = sqlite3.connect(args.db_path)
@@ -651,10 +669,16 @@ def main():
             f"Warn: odd number of games requesting, actually running {half_games} games per side"
         )
 
-    if half_games > len(openings):
+    if using_openings_file and half_games > len(openings):
         print(
             f"Warn: only {len(openings)} openings available for {half_games} game pairs; "
             "openings will repeat, so some games will be identical for deterministic engines"
+        )
+    elif not using_openings_file and half_games > 1:
+        print(
+            "Note: no openings file, so every game starts from the standard position. "
+            "Variety relies on engine non-determinism (e.g. the Wobble UCI option); "
+            "without it, all games will be identical."
         )
 
     # Each opening is played once with each engine as White, so the two engines

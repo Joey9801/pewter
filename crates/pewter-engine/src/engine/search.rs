@@ -235,7 +235,9 @@ impl<'a> Searcher<'a> {
             last_perf_info: Instant::now(),
             t_table,
             game_history,
-            path: Vec::new(),
+            // Pre-sized to a depth we will never reach, so the push/pop in the
+            // node loop never reallocates.
+            path: Vec::with_capacity(256),
             soft_deadline: None,
             hard_deadline: None,
             infinite: false,
@@ -467,16 +469,24 @@ impl<'a> Searcher<'a> {
     /// plies (positions further back are separated by an irreversible move and
     /// so cannot be repetitions).
     fn is_repetition(&self, state: &State) -> bool {
+        // A repetition needs at least four plies (both sides move and return),
+        // so anything with a shorter reversible run can't repeat.
         let lookback = state.halfmove_clock as usize;
-        if lookback == 0 {
+        if lookback < 4 {
             return false;
         }
 
+        // Only positions with the same side to move can match, and the side to
+        // move is part of the Zobrist key, so we only need to compare every
+        // other ancestor. `skip(1)` moves past the immediate parent (opposite
+        // side to move) and `step_by(2)` visits the same-side ancestors.
         self.path
             .iter()
             .rev()
             .chain(self.game_history.iter().rev())
             .take(lookback)
+            .skip(1)
+            .step_by(2)
             .any(|&h| h == state.zobrist)
     }
 
@@ -676,33 +686,65 @@ mod tests {
         assert_eq!(mate_in_moves(score), Some(0));
     }
 
+    /// Shuffle both knights out and back (Nf3 Nf6 Ng1 Ng8), returning to the
+    /// start position. Returns the final (repeated) state and the Zobrist
+    /// hashes of every position strictly before it.
+    fn knight_shuffle_repetition() -> (State, Vec<ZobristHash>) {
+        let mut state =
+            parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        let mut prior = vec![state.zobrist];
+        for mv in ["g1f3", "g8f6", "f3g1", "f6g8"] {
+            state = state.apply_move(Move::from_long_algebraic(mv).unwrap());
+            prior.push(state.zobrist);
+        }
+        // The last entry is the current position itself; the game history holds
+        // only the positions that came before it.
+        prior.pop();
+        assert_eq!(state.halfmove_clock, 4);
+        (state, prior)
+    }
+
     #[test]
     fn repetition_detected_against_game_history() {
-        // A reversible position whose hash is already in the game history is a
-        // repetition (the halfmove clock is non-zero so the lookback window is
-        // open).
-        let state = parse_fen("4k3/8/8/8/8/8/8/4K3 w - - 8 20").unwrap();
+        // The position four plies back (same side to move) is the same as the
+        // current one, which is a repetition.
+        let (state, history) = knight_shuffle_repetition();
         let mut t_table = TranspositionTable::with_mb(1);
-        let searcher = Searcher::new(controls(), &mut t_table, vec![state.zobrist]);
+        let searcher = Searcher::new(controls(), &mut t_table, history);
         assert!(searcher.is_repetition(&state));
     }
 
     #[test]
     fn repetition_detected_along_search_path() {
-        let state = parse_fen("4k3/8/8/8/8/8/8/4K3 w - - 8 20").unwrap();
+        let (state, history) = knight_shuffle_repetition();
         let mut t_table = TranspositionTable::with_mb(1);
         let mut searcher = Searcher::new(controls(), &mut t_table, vec![]);
-        searcher.path.push(state.zobrist);
+        for h in history {
+            searcher.path.push(h);
+        }
         assert!(searcher.is_repetition(&state));
     }
 
     #[test]
-    fn no_repetition_when_halfmove_clock_zero() {
-        // With a zero halfmove clock the lookback window is closed, so even a
-        // matching hash is not a repetition.
-        let state = parse_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 20").unwrap();
+    fn no_repetition_for_opposite_side_to_move() {
+        // The position two plies into the shuffle has a different side to move
+        // from the start, so it must not be mistaken for a repetition of it.
+        let (state, mut history) = knight_shuffle_repetition();
+        // Drop the matching four-ply-back entry, leaving only odd-distance
+        // (opposite side to move) ancestors.
+        history.remove(0);
         let mut t_table = TranspositionTable::with_mb(1);
-        let searcher = Searcher::new(controls(), &mut t_table, vec![state.zobrist]);
+        let searcher = Searcher::new(controls(), &mut t_table, history);
+        assert!(!searcher.is_repetition(&state));
+    }
+
+    #[test]
+    fn no_repetition_when_halfmove_clock_low() {
+        // With a halfmove clock below four a repetition is impossible, so the
+        // lookback window stays closed even against a matching hash.
+        let state = parse_fen("4k3/8/8/8/8/8/8/4K3 w - - 2 20").unwrap();
+        let mut t_table = TranspositionTable::with_mb(1);
+        let searcher = Searcher::new(controls(), &mut t_table, vec![state.zobrist; 4]);
         assert!(!searcher.is_repetition(&state));
     }
 

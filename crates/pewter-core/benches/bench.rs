@@ -1,5 +1,7 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use pewter_core::{io::fen::parse_fen, Move};
+use std::hint::black_box;
+
+use criterion::{Criterion, criterion_group, criterion_main};
+use pewter_core::{Move, io::fen::parse_fen};
 
 struct ApplyMoveBenchmark {
     name: &'static str,

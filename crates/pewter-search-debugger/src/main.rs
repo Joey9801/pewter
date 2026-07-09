@@ -4,8 +4,8 @@ use std::{fs::File, path::PathBuf, sync::atomic::AtomicBool};
 use anyhow::Result;
 use clap::Parser;
 use crossbeam_channel::unbounded;
-use pewter_core::{io::fen::parse_fen};
-use pewter_engine::{engine::search::SearchControls, Engine};
+use pewter_core::io::fen::parse_fen;
+use pewter_engine::{Engine, engine::search::SearchControls};
 
 /// Run a single best_move search, without any UCI server logic
 #[derive(Parser, Debug)]

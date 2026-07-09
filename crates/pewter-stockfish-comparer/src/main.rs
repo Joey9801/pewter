@@ -11,8 +11,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 use pewter_core::{
-    io::fen::{format_fen, parse_fen},
     Move, State,
+    io::fen::{format_fen, parse_fen},
 };
 
 fn parse_stockfish_perft_line(line: &str) -> (Move, usize) {
@@ -66,7 +66,7 @@ impl StockfishInterface {
             .expect("Expected stockfish handle to have a stdin");
 
         let fen_str = format_fen(&state);
-        write!(stdin, "position fen {}\n", fen_str).expect("Failed to write to stockfish stdin");
+        writeln!(stdin, "position fen {}", fen_str).expect("Failed to write to stockfish stdin");
     }
 
     fn perft(&mut self, state: State, depth: u8) -> Vec<(Move, usize)> {
@@ -78,7 +78,7 @@ impl StockfishInterface {
             .as_mut()
             .expect("Expected stockfish handle to have a stdin");
 
-        write!(stdin, "go perft {}\n", depth).expect("Failed to write to stockfish stdin");
+        writeln!(stdin, "go perft {}", depth).expect("Failed to write to stockfish stdin");
 
         let stdout = self
             .child
@@ -91,7 +91,7 @@ impl StockfishInterface {
         let mut done = 0;
         for line in lines {
             let line = line.unwrap();
-            if line.len() == 0 {
+            if line.is_empty() {
                 done += 1
             }
 
@@ -131,17 +131,14 @@ fn compare_perft_outputs(mut a: Vec<(Move, usize)>, mut b: Vec<(Move, usize)>) -
 
     let a_set = a.iter().map(|(m, _)| m).collect::<HashSet<_>>();
     let b_set = b.iter().map(|(m, _)| m).collect::<HashSet<_>>();
-    match a_set.symmetric_difference(&b_set).next() {
-        Some(m) => {
-            if a_set.contains(m) {
-                return PerftComparison::MoveDiff(MoveDifference::ExtraMove(**m));
-            }
-
-            if b_set.contains(m) {
-                return PerftComparison::MoveDiff(MoveDifference::MissingMove(**m));
-            }
+    if let Some(m) = a_set.symmetric_difference(&b_set).next() {
+        if a_set.contains(m) {
+            return PerftComparison::MoveDiff(MoveDifference::ExtraMove(**m));
         }
-        None => (),
+
+        if b_set.contains(m) {
+            return PerftComparison::MoveDiff(MoveDifference::MissingMove(**m));
+        }
     }
 
     for ((m, a_count), (_m, b_count)) in a.iter().zip(b.iter()) {
@@ -177,7 +174,7 @@ fn find_minimal_difference(
                 break Some(Difference {
                     position: state,
                     move_difference: md,
-                })
+                });
             }
             PerftComparison::SubtreeSizeDiff(m) => {
                 println!("Found difference after making {}, refining...", m);

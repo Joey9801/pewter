@@ -1,10 +1,10 @@
-use pewter_core::{Color, Piece, State, BoardPos};
+use pewter_core::{BoardPos, Color, Piece, State};
 
 pub type Evaluation = i32;
 
 pub mod consts {
-    use pewter_core::{Piece, BoardPos};
     use super::Evaluation;
+    use pewter_core::{BoardPos, Piece};
 
     pub const POS_INFINITY: Evaluation = Evaluation::MAX - 1024;
     pub const NEG_INFINITY: Evaluation = -POS_INFINITY;
@@ -38,13 +38,13 @@ pub mod consts {
         }
     }
 
-    pub const STARTING_MATERIAL: Evaluation =
-        piece_value(Piece::Pawn) * 8 +
-        piece_value(Piece::Rook) * 2 +
-        piece_value(Piece::Knight) * 2 +
-        piece_value(Piece::Bishop) * 2 +
-        piece_value(Piece::Queen);
+    pub const STARTING_MATERIAL: Evaluation = piece_value(Piece::Pawn) * 8
+        + piece_value(Piece::Rook) * 2
+        + piece_value(Piece::Knight) * 2
+        + piece_value(Piece::Bishop) * 2
+        + piece_value(Piece::Queen);
 
+    #[rustfmt::skip]
     const PAWN_SQUARE_TABLE: [Evaluation; 64] = [
         0,  0,  0,  0,  0,  0,  0,  0,
         50, 50, 50, 50, 50, 50, 50, 50,
@@ -53,9 +53,10 @@ pub mod consts {
          0,  0,  0, 20, 20,  0,  0,  0,
          5, -5,-10,  0,  0,-10, -5,  5,
          5, 10, 10,-20,-20, 10, 10,  5,
-         0,  0,  0,  0,  0,  0,  0,  0
+         0,  0,  0,  0,  0,  0,  0,  0,
     ];
-    
+
+    #[rustfmt::skip]
     const KNIGHT_SQUARE_TABLE: [Evaluation; 64] = [
         -50,-40,-30,-30,-30,-30,-40,-50,
         -40,-20,  0,  0,  0,  0,-20,-40,
@@ -64,9 +65,10 @@ pub mod consts {
         -30,  0, 15, 20, 20, 15,  0,-30,
         -30,  5, 10, 15, 15, 10,  5,-30,
         -40,-20,  0,  5,  5,  0,-20,-40,
-        -50,-40,-30,-30,-30,-30,-40,-50, 
+        -50,-40,-30,-30,-30,-30,-40,-50,
     ];
-    
+
+    #[rustfmt::skip]
     const BISHOP_SQUARE_TABLE: [Evaluation; 64] = [
         -20,-10,-10,-10,-10,-10,-10,-20,
         -10,  0,  0,  0,  0,  0,  0,-10,
@@ -77,7 +79,8 @@ pub mod consts {
         -10,  5,  0,  0,  0,  0,  5,-10,
         -20,-10,-10,-10,-10,-10,-10,-20,
     ];
-    
+
+    #[rustfmt::skip]
     const ROOK_SQUARE_TABLE: [Evaluation; 64] = [
         0,  0,  0,  0,  0,  0,  0,  0,
         5, 10, 10, 10, 10, 10, 10,  5,
@@ -86,9 +89,10 @@ pub mod consts {
        -5,  0,  0,  0,  0,  0,  0, -5,
        -5,  0,  0,  0,  0,  0,  0, -5,
        -5,  0,  0,  0,  0,  0,  0, -5,
-        0,  0,  0,  5,  5,  0,  0,  0
+        0,  0,  0,  5,  5,  0,  0,  0,
     ];
-    
+
+    #[rustfmt::skip]
     const QUEEN_SQUARE_TABLE: [Evaluation; 64] = [
         -20,-10,-10, -5, -5,-10,-10,-20,
         -10,  0,  0,  0,  0,  0,  0,-10,
@@ -97,20 +101,22 @@ pub mod consts {
           0,  0,  5,  5,  5,  5,  0, -5,
         -10,  5,  5,  5,  5,  5,  0,-10,
         -10,  0,  5,  0,  0,  0,  0,-10,
-        -20,-10,-10, -5, -5,-10,-10,-20
+        -20,-10,-10, -5, -5,-10,-10,-20,
     ];
-    
+
+    #[rustfmt::skip]
     const NULL_SQUARE_TABLE: [Evaluation; 64] = [
-       0, 0, 0, 0, 0, 0, 0, 0,  
-       0, 0, 0, 0, 0, 0, 0, 0,  
-       0, 0, 0, 0, 0, 0, 0, 0,  
-       0, 0, 0, 0, 0, 0, 0, 0,  
-       0, 0, 0, 0, 0, 0, 0, 0,  
-       0, 0, 0, 0, 0, 0, 0, 0,  
-       0, 0, 0, 0, 0, 0, 0, 0,  
-       0, 0, 0, 0, 0, 0, 0, 0,  
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
     ];
-    
+
+    #[rustfmt::skip]
     const CENTER_MANHATTEN_DISTANCE: [u8; 64] = [
         6, 5, 4, 3, 3, 4, 5, 6,
         5, 4, 3, 2, 2, 3, 4, 5,
@@ -121,7 +127,7 @@ pub mod consts {
         5, 4, 3, 2, 2, 3, 4, 5,
         6, 5, 4, 3, 3, 4, 5, 6,
     ];
-    
+
     pub const fn piece_square_table(piece: Piece) -> [Evaluation; 64] {
         match piece {
             Piece::Pawn => PAWN_SQUARE_TABLE,
@@ -129,10 +135,10 @@ pub mod consts {
             Piece::Bishop => BISHOP_SQUARE_TABLE,
             Piece::Rook => ROOK_SQUARE_TABLE,
             Piece::Queen => QUEEN_SQUARE_TABLE,
-            _ => NULL_SQUARE_TABLE
+            _ => NULL_SQUARE_TABLE,
         }
     }
-    
+
     pub const fn center_manhatten_distance(pos: BoardPos) -> Evaluation {
         CENTER_MANHATTEN_DISTANCE[pos.to_bitboard_offset() as usize] as Evaluation
     }
@@ -177,7 +183,7 @@ fn piece_square_value_single(color: Color, piece: Piece, pos: BoardPos) -> Evalu
         Color::White => pos.to_bitboard_offset(),
         Color::Black => 63 - pos.to_bitboard_offset(),
     };
-    
+
     table[index as usize]
 }
 
@@ -201,28 +207,32 @@ fn endgame_weight(state: &State, color: Color, mat: Evaluation) -> f32 {
     let reference_eg_mat = consts::piece_value(Piece::Rook) * 2
         + consts::piece_value(Piece::Bishop)
         + consts::piece_value(Piece::Knight);
-    
+
     // No end-game material is "maximally end-game"
     // More than the reference end-game material is "minimally end-game"
-    
+
     let x = eg_mat as f32 / reference_eg_mat as f32;
-    if x > 1f32 {
-        1f32
-    } else {
-        1f32 - x
-    }
+    if x > 1f32 { 1f32 } else { 1f32 - x }
 }
 
 /// In the endgame, it is beneficial to push the opponent king to the edges of the board.
 ///
 /// This method returns more positive evaluation the closer the opponents king is to the sides, but
 /// only if in the endgame.
-fn push_opp_king_to_sides(state: &State, color: Color, weight: f32, our_mat: Evaluation, opp_mat: Evaluation) -> Evaluation {
+fn push_opp_king_to_sides(
+    state: &State,
+    color: Color,
+    weight: f32,
+    our_mat: Evaluation,
+    opp_mat: Evaluation,
+) -> Evaluation {
     if our_mat < (opp_mat + consts::piece_value(Piece::Pawn) * 2) {
         return 0;
     }
-    
-    let opp_king_pos = state.board.king_pos(!color)
+
+    let opp_king_pos = state
+        .board
+        .king_pos(!color)
         .expect("There is no opponent king");
 
     let score = consts::center_manhatten_distance(opp_king_pos) * 10;
@@ -235,7 +245,7 @@ fn nonlinear_material_diff(our_mat: Evaluation, opp_mat: Evaluation) -> Evaluati
 
     let diff = our_mat - opp_mat;
     let total = our_mat + opp_mat;
-    
+
     ((diff as f32 / total as f32) * 100.0) as Evaluation
 }
 
@@ -246,26 +256,36 @@ pub fn evaluate(state: &State) -> Evaluation {
 
     let our_mat = material_value(state, state.to_play);
     let opp_mat = material_value(state, !state.to_play);
-    
+
     our_score += our_mat;
     opp_score += opp_mat;
-    
+
     our_score += nonlinear_material_diff(our_mat, opp_mat);
-    
+
     // Having a pair of bishops is more than twice as good as having a single bishop
-    if state.board.color_piece_board(state.to_play, Piece::Bishop).count() > 1 {
+    if state
+        .board
+        .color_piece_board(state.to_play, Piece::Bishop)
+        .count()
+        > 1
+    {
         our_score += 100;
     }
-    if state.board.color_piece_board(!state.to_play, Piece::Bishop).count() > 1 {
+    if state
+        .board
+        .color_piece_board(!state.to_play, Piece::Bishop)
+        .count()
+        > 1
+    {
         opp_score += 100;
     }
 
     our_score += piece_square_value(state, state.to_play);
     opp_score += piece_square_value(state, !state.to_play);
-    
+
     let our_eg_weight = endgame_weight(state, state.to_play, opp_mat);
     let opp_eg_weight = endgame_weight(state, !state.to_play, opp_mat);
-    
+
     our_score += push_opp_king_to_sides(state, state.to_play, our_eg_weight, our_mat, opp_mat);
     opp_score += push_opp_king_to_sides(state, !state.to_play, opp_eg_weight, opp_mat, our_mat);
 

@@ -3,7 +3,7 @@ pub mod masks;
 use crate::BoardPos;
 use std::iter::FromIterator;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct BitBoard(pub u64);
 
 impl BitBoard {
@@ -110,12 +110,6 @@ impl BitBoard {
     }
 }
 
-impl Default for BitBoard {
-    fn default() -> Self {
-        Self(0u64)
-    }
-}
-
 impl std::ops::Not for BitBoard {
     type Output = Self;
 
@@ -145,11 +139,7 @@ impl std::ops::Index<BoardPos> for BitBoard {
 
     fn index(&self, idx: BoardPos) -> &Self::Output {
         // NB looks silly, but afaict required to get a static lifetime bool reference
-        if self.get(idx) {
-            &true
-        } else {
-            &false
-        }
+        if self.get(idx) { &true } else { &false }
     }
 }
 

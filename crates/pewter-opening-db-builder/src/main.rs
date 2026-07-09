@@ -10,8 +10,8 @@ use clap::Parser;
 use futures::Future;
 use governor::{Quota, RateLimiter};
 use pewter_core::{
-    io::pgn::{parse_multi_pgn, Game},
     State,
+    io::pgn::{Game, parse_multi_pgn},
 };
 use pewter_engine::engine::opening_db::OpeningDb;
 use rayon::prelude::*;
@@ -80,7 +80,7 @@ async fn get_all_games(cache_dir: &Path) -> Result<Vec<Game>> {
     let all_games = all_games
         .into_iter()
         .filter_map(|g| g.ok())
-        .flat_map(|g| g)
+        .flatten()
         .collect::<Vec<_>>();
 
     Ok(all_games)
@@ -90,14 +90,11 @@ fn build_db_from_games(games: &[Game]) -> OpeningDb {
     println!("Building single DB from {} games", games.len());
     let mut db = games
         .par_iter()
-        .fold(
-            || OpeningDb::new_empty(),
-            |mut db, game| {
-                db.add_game(game);
-                db
-            },
-        )
-        .reduce(|| OpeningDb::new_empty(), |a, b| a.merge(b));
+        .fold(OpeningDb::new_empty, |mut db, game| {
+            db.add_game(game);
+            db
+        })
+        .reduce(OpeningDb::new_empty, |a, b| a.merge(b));
 
     println!("Finished building initial DB");
 
@@ -120,7 +117,7 @@ async fn save_db_to_disk(db: &OpeningDb, path: &Path) -> Result<()> {
 
 async fn load_db_from_disk(path: &Path) -> Result<OpeningDb> {
     let data = tokio::fs::read(path).await?;
-    Ok(OpeningDb::deserialize(&data)?)
+    OpeningDb::deserialize(&data)
 }
 
 /// Handles scraping pgnmentor.com, and building a pewter opening DB from those games

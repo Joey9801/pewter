@@ -1,23 +1,23 @@
 use std::{path::Path, time::Duration};
 
-use pewter_core::{zobrist::ZobristHash, Move, State};
+use pewter_core::{Move, State, zobrist::ZobristHash};
 
 use anyhow::Result;
 use crossbeam_channel::SendError;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::seq::IndexedRandom;
 use thiserror::Error;
 
 pub mod engine_server;
 pub mod eval;
 pub mod opening_db;
-pub mod transposition;
-pub mod search;
 pub mod ordering;
+pub mod search;
+pub mod transposition;
 
 pub use engine_server::EngineServer;
 use eval::Evaluation;
-use search::{Searcher, SearchControls, WobbleConfig};
-use transposition::{TranspositionTable, DEFAULT_HASH_MB};
+use search::{SearchControls, Searcher, WobbleConfig};
+use transposition::{DEFAULT_HASH_MB, TranspositionTable};
 
 use opening_db::OpeningDb;
 
@@ -34,7 +34,7 @@ pub struct Timings {
 
     /// The amount of extra time black will get after making the next move
     pub black_increment: Duration,
-    
+
     /// Request from the engine host to spend exactly this much time on the next move
     pub move_time: Option<Duration>,
 }
@@ -78,7 +78,7 @@ pub enum EngineError {
 
     #[error("Failed to emit engine message")]
     SendError,
-    
+
     #[error("Engine was stopped before first result")]
     EarlyStop,
 }
@@ -103,6 +103,12 @@ pub struct Engine {
 
     /// Optional root-move randomisation, for diversifying self-play games.
     wobble: WobbleConfig,
+}
+
+impl Default for Engine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Engine {
@@ -166,7 +172,7 @@ impl Engine {
             let book_move = match db.query(&state) {
                 [] => None,
                 [r] => Some(r.m),
-                [multiple @ ..] => Some(multiple.choose(&mut thread_rng()).unwrap().m),
+                multiple => Some(multiple.choose(&mut rand::rng()).unwrap().m),
             };
 
             if let Some(book_move) = book_move {
@@ -175,7 +181,7 @@ impl Engine {
             }
         }
 
-        let timings = timings.unwrap_or(Timings::default());
+        let timings = timings.unwrap_or_default();
 
         // Bump the table generation so this search's writes are preferred over
         // entries left behind by previous searches.

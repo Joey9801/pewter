@@ -1,12 +1,12 @@
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 
 use super::{EngineError, PerfInfo, SearchControls, Timings};
-use pewter_core::{zobrist::ZobristHash, Move, State};
+use pewter_core::{Move, State, zobrist::ZobristHash};
 
 #[derive(Clone, Copy, Debug)]
 struct BeginSearchArgs {

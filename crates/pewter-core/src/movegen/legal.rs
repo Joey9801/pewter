@@ -1,5 +1,5 @@
 use crate::{
-    bitboard::masks, chessmove::MoveSetChunk, BitBoard, BoardPos, CastleSide, MoveSet, Piece, State,
+    BitBoard, BoardPos, CastleSide, MoveSet, Piece, State, bitboard::masks, chessmove::MoveSetChunk,
 };
 
 use super::pseudo_legal;

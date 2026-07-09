@@ -1,5 +1,6 @@
 use crate::{
-    chessmove::MoveSetChunk, BitBoard, BoardPos, Color, File, MoveSet, Piece, Rank, State, bitboard::masks,
+    BitBoard, BoardPos, Color, File, MoveSet, Piece, Rank, State, bitboard::masks,
+    chessmove::MoveSetChunk,
 };
 
 pub fn all_pseudo_legal(state: &State) -> MoveSet {
@@ -24,6 +25,7 @@ pub fn all_pseudo_legal(state: &State) -> MoveSet {
 /// Does not include the following special moves:
 ///    - En-passant pawn captures
 ///    - Castling
+///
 /// As both of these types of move have more in depth legality checking, and are handled specially
 /// in the full legal move generator.
 pub fn pseudo_legal_moves(state: &State, piece: Piece, source: BoardPos) -> MoveSetChunk {
@@ -57,17 +59,18 @@ fn pawn_psuedo_legal(
 ) -> MoveSetChunk {
     let all_union = our_pieces.union_with(opp_pieces);
 
-    let pushes = if source.rank == color.numbered_rank(2) &&
-        all_union.get(BoardPos::from_file_rank(source.file, color.numbered_rank(3)))
-    {
+    let pushes = if source.rank == color.numbered_rank(2)
+        && all_union.get(BoardPos::from_file_rank(
+            source.file,
+            color.numbered_rank(3),
+        )) {
         // Can't jump over a piece with a double push
         BitBoard::new_empty()
     } else {
         masks::pawn_pushes(color, source).intersect_with(all_union.inverse())
     };
-    
-    let attacks = masks::pawn_attacks(color, source)
-        .intersect_with(opp_pieces);
+
+    let attacks = masks::pawn_attacks(color, source).intersect_with(opp_pieces);
 
     let dest_set = pushes.union_with(attacks);
     let promotion = source.rank == color.numbered_rank(7);
@@ -79,8 +82,7 @@ fn pawn_psuedo_legal(
 }
 
 fn knight_pseudo_legal(source: BoardPos, our_pieces: BitBoard) -> MoveSetChunk {
-    let dest_set = masks::knight_moves(source)
-        .intersect_with(our_pieces.inverse());
+    let dest_set = masks::knight_moves(source).intersect_with(our_pieces.inverse());
 
     MoveSetChunk {
         source,
@@ -99,7 +101,7 @@ fn sliding_piece_pseudo_legal(
 
     let source_nums = (source.file.to_num() as i8, source.rank.to_num() as i8);
     for dir in dirs {
-        let mut dest_nums = source_nums.clone();
+        let mut dest_nums = source_nums;
         loop {
             dest_nums.0 += dir.0;
             dest_nums.1 += dir.1;

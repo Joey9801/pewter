@@ -2,13 +2,13 @@ use std::sync::RwLock;
 use std::time::Duration;
 
 use anyhow::Result;
-use crossbeam_channel::{select, Sender};
+use crossbeam_channel::{Sender, select};
 
-use pewter_core::{io::uci::*, Move};
+use pewter_core::{Move, io::uci::*};
+use pewter_engine::engine::PerfInfo;
 use pewter_engine::engine::engine_server::EngineServer;
 use pewter_engine::engine::eval::{self, Evaluation};
 use pewter_engine::engine::transposition::DEFAULT_HASH_MB;
-use pewter_engine::engine::PerfInfo;
 use tracing_subscriber::prelude::*;
 
 #[derive(Clone, Debug)]
@@ -107,9 +107,7 @@ fn main() -> Result<()> {
     let file = tracing_appender::rolling::hourly("./logs", "pewter.log");
     let file_layer = tracing_subscriber::fmt::layer().with_writer(file);
 
-    tracing_subscriber::registry()
-        .with(file_layer)
-        .init();
+    tracing_subscriber::registry().with(file_layer).init();
 
     tracing::info!("Starting up pewter-engine");
 
@@ -153,20 +151,22 @@ fn handle_uci_cmd(
             tracing::info!("Received quit command, shutting down");
             return Ok(true);
         }
-        UciCommand::SetOption { option_name, value } => {
-            if let Some(value) = value {
-                let mut opts = opts.write().unwrap();
-                if opts.set_value(&option_name, &value).is_ok() {
-                    match option_name.as_str() {
-                        "Hash" => engine.set_hash_size(opts.hash_mb)?,
-                        "Wobble" | "WobblePlies" => {
-                            engine.set_wobble(opts.wobble_cp, opts.wobble_plies)?
-                        }
-                        _ => (),
+        UciCommand::SetOption {
+            option_name,
+            value: Some(value),
+        } => {
+            let mut opts = opts.write().unwrap();
+            if opts.set_value(&option_name, &value).is_ok() {
+                match option_name.as_str() {
+                    "Hash" => engine.set_hash_size(opts.hash_mb)?,
+                    "Wobble" | "WobblePlies" => {
+                        engine.set_wobble(opts.wobble_cp, opts.wobble_plies)?
                     }
+                    _ => (),
                 }
             }
         }
+        UciCommand::SetOption { .. } => {}
         UciCommand::UciNewGame => engine.new_game()?,
         UciCommand::Position { position, moves } => {
             // Parse the position, and resolve any moves passed in, recording the

@@ -49,7 +49,7 @@ impl Move {
             promotion: None,
         };
 
-        if algebraic_str.as_bytes().len() > 4 {
+        if algebraic_str.len() > 4 {
             let p = match &algebraic_str[4..5] {
                 "q" => Piece::Queen,
                 "r" => Piece::Rook,
@@ -156,6 +156,10 @@ impl MoveSetChunk {
         self.dest_set.count() * if self.promotion { 4 } else { 1 }
     }
 
+    pub fn is_empty(self) -> bool {
+        !self.dest_set.any()
+    }
+
     pub fn any(self) -> bool {
         self.dest_set.any()
     }
@@ -235,6 +239,10 @@ impl MoveSet {
 
     pub fn len(&self) -> usize {
         self.chunks.iter().map(|c| c.len() as usize).sum()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.chunks.is_empty()
     }
 
     // TODO: This iterator isn't an ExactSizeIterator, but notionally could be

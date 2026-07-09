@@ -1,10 +1,9 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::state::{CastleRights, State};
 use crate::{BoardPos, Color, Piece};
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ZobristHash(u64);
 
 impl ZobristHash {

@@ -11,7 +11,19 @@ pub mod consts {
 
     /// The score if the current player has been mated
     pub const MATE: Evaluation = NEG_INFINITY / 2;
-    
+
+    /// The maximum number of plies of a mate that we bother distinguishing.
+    ///
+    /// Mate scores live in a band `[MATE, MATE + MAX_MATE_PLY]` (and the mirror
+    /// positive band). This must be comfortably smaller than the gap between
+    /// `MATE` and any normal evaluation magnitude, which holds by construction:
+    /// `MATE` is ~1e9 while real evaluations are only ever a few thousand.
+    pub const MAX_MATE_PLY: Evaluation = 1024;
+
+    /// Any score whose magnitude is at least this large encodes a forced mate
+    /// rather than a heuristic evaluation.
+    pub const MATE_THRESHOLD: Evaluation = -MATE - MAX_MATE_PLY;
+
     pub const DRAW: Evaluation = 0;
 
     /// The material value of each piece, in centipawns
@@ -126,6 +138,27 @@ pub mod consts {
     }
 }
 
+/// Whether the given score encodes a forced mate rather than a heuristic
+/// evaluation.
+pub fn is_mate_score(e: Evaluation) -> bool {
+    e.abs() >= consts::MATE_THRESHOLD
+}
+
+/// If `e` is a mate score, the number of moves (not plies) until mate, signed
+/// so that a positive result means the side to move delivers mate and a
+/// negative result means the side to move is being mated.
+pub fn mate_in_moves(e: Evaluation) -> Option<i32> {
+    if !is_mate_score(e) {
+        return None;
+    }
+
+    // Distance from the current node, in plies, recovered from the mate band.
+    let plies = -consts::MATE - e.abs();
+    let moves = (plies + 1) / 2;
+
+    Some(if e > 0 { moves } else { -moves })
+}
+
 /// The total value of material in centipawns for the given color
 fn material_value(state: &State, color: Color) -> Evaluation {
     Piece::all()
@@ -237,4 +270,38 @@ pub fn evaluate(state: &State) -> Evaluation {
     opp_score += push_opp_king_to_sides(state, !state.to_play, opp_eg_weight, opp_mat, our_mat);
 
     our_score - opp_score
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use consts::MATE;
+
+    #[test]
+    fn mate_scores_are_detected() {
+        assert!(is_mate_score(MATE));
+        assert!(is_mate_score(-MATE));
+        assert!(is_mate_score(MATE + 5));
+        assert!(is_mate_score(-(MATE + 5)));
+
+        assert!(!is_mate_score(0));
+        assert!(!is_mate_score(5000));
+        assert!(!is_mate_score(-5000));
+    }
+
+    #[test]
+    fn mate_in_moves_recovers_distance() {
+        // A mated node P plies from the root scores `MATE + P`, which alternates
+        // sign as it is negated back up to the root.
+
+        // We deliver mate in 1 move: mated node at ply 1 (odd -> positive root).
+        assert_eq!(mate_in_moves(-(MATE + 1)), Some(1));
+        // Mate in 2 moves: mated node at ply 3.
+        assert_eq!(mate_in_moves(-(MATE + 3)), Some(2));
+        // We get mated in 2 moves: mated node at ply 4 (even -> negative root).
+        assert_eq!(mate_in_moves(MATE + 4), Some(-2));
+
+        assert_eq!(mate_in_moves(0), None);
+        assert_eq!(mate_in_moves(1234), None);
+    }
 }

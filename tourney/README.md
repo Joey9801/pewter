@@ -57,30 +57,67 @@ uv run tourney.py \
 | `--num-games`   | `10`               | Total games. Rounded down to an even number (half per colour).    |
 | `--concurrency` | *(cpu count)*      | Games to run in parallel.                                         |
 | `--tc`          | `60+0`             | Time control per side, `base[+increment]` in seconds.             |
-| `--openings`    | `openings.txt`     | File of opening lines used to vary games (see below).             |
+| `--openings`    | *(none)*           | Optional file of opening lines to vary games (see below).         |
 | `--db-path`     | `tourney.db`       | SQLite database results are stored in.                            |
 
 Results are appended to the SQLite database, keyed by the engine's name, path,
 binary checksum, and options, so repeated runs of the same build accumulate.
 
-## Openings
+## Getting variety between games
 
-`pewter`'s search is deterministic, so without variety every game from the
-start position would be identical. Each game pair is therefore seeded with a
-distinct opening line played out as un-timed "book" moves, and the same opening
-is played once by each engine as White so colours are balanced.
+`pewter`'s search is deterministic by default, so two games from the same
+starting position with the same time control would be identical. There are two
+ways to get a spread of distinct games; you can use either or both.
 
-The bundled [`openings.txt`](./openings.txt) covers a spread of common,
-balanced openings. The format is one opening per line, with an optional name
-before a `|` and the moves in SAN after it:
+### Engine non-determinism (default)
+
+By default every game starts from the standard position, and variety comes from
+the engine itself. `pewter` exposes two UCI options for this:
+
+| Option        | Default | Description                                                          |
+| ------------- | ------- | -------------------------------------------------------------------- |
+| `Wobble`      | `0`     | Score margin in centipawns. When > 0, the engine plays a random move from among those within this many centipawns of the best. `0` disables it. |
+| `WobblePlies` | `0`     | Apply the wobble only for this many opening half-moves (plies), then play the best move.                                                        |
+
+Restricting the randomness to the opening keeps the strength cost small — early
+positions have many near-equal moves — while still branching the games apart.
+Only one side needs it for a game to diverge, so you can enable it on just the
+engine under test. Set them in that engine's JSON, e.g. wobble for the first
+eight plies:
+
+```json
+{
+    "name": "pewter",
+    "path": "../target/release/pewter-engine",
+    "options": { "Wobble": 30, "WobblePlies": 8 },
+    "env": {}
+}
+```
+
+Note that any non-zero `Wobble` makes the engine play slightly below its true
+strength during those opening plies, so the measured Elo gap is a (conservative)
+floor rather than an exact figure. If you leave `Wobble` at `0` on both engines
+and don't supply openings, every game will be identical.
+
+### Opening lines (`--openings`)
+
+Alternatively, seed each game pair with a distinct opening line played out as
+un-timed "book" moves, the same opening played once by each engine as White so
+colours are balanced. This is strength-neutral (both engines get the same
+positions) but requires maintaining a file of lines.
+
+The bundled [`openings.txt`](./openings.txt) covers a spread of common, balanced
+openings. The format is one opening per line, with an optional name before a `|`
+and the moves in SAN after it:
 
 ```
 Ruy Lopez | e4 e5 Nf3 Nc6 Bb5 a6
 ```
 
-Lines beginning with `#` are comments. Provide your own set with `--openings`.
-For a statistically meaningful match, supply at least `num-games / 2` openings
-so that no two games repeat the same line.
+Lines beginning with `#` are comments. Enable them with
+`--openings openings.txt`, or provide your own set. For a statistically
+meaningful match, supply at least `num-games / 2` openings so that no two games
+repeat the same line.
 
 ## Output
 

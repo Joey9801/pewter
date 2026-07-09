@@ -45,7 +45,7 @@ fn single_search(args: &Args) -> Result<()> {
     println!("{}", initial_state.pretty_format());
 
     let mut engine = Engine::new();
-    engine.set_board_state(initial_state);
+    engine.set_board_state(initial_state, vec![initial_state.zobrist]);
 
     let (perf_tx, perf_rx) = unbounded();
     let max_depth = args.depth.or(Some(5));
@@ -78,7 +78,7 @@ fn nodes_searched_histogram(args: &Args) -> Result<()> {
 
     for _ in 0..1000 {
         let mut engine = Engine::new();
-        engine.set_board_state(initial_state);
+        engine.set_board_state(initial_state, vec![initial_state.zobrist]);
         let (perf_tx, perf_rx) = unbounded();
         engine.search_best_move(
             false,

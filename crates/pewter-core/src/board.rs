@@ -82,24 +82,12 @@ impl Board {
 
         // Tree-style search benchmarked a little faster than a linear search through each piece
         let piece = if (p | r)[pos] {
-            if p[pos] {
-                Piece::Pawn
-            } else {
-                Piece::Rook
-            }
+            if p[pos] { Piece::Pawn } else { Piece::Rook }
         } else {
             if (n | b)[pos] {
-                if n[pos] {
-                    Piece::Knight
-                } else {
-                    Piece::Bishop
-                }
+                if n[pos] { Piece::Knight } else { Piece::Bishop }
             } else {
-                if k[pos] {
-                    Piece::King
-                } else {
-                    Piece::Queen
-                }
+                if k[pos] { Piece::King } else { Piece::Queen }
             }
         };
 

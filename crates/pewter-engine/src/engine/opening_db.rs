@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use pewter_core::{io::pgn::Game, state::GameResult, Color, Move, State, zobrist::ZobristHash};
+use pewter_core::{Color, Move, State, io::pgn::Game, state::GameResult, zobrist::ZobristHash};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpeningDb(HashMap<ZobristHash, Vec<DbResult>>);
@@ -41,7 +41,7 @@ impl OpeningDb {
         state.zobrist = pewter_core::zobrist::calculate_entire_zobrist(&state);
 
         for m in &game.moves {
-            let existing_set = self.0.entry(state.zobrist).or_insert(Vec::new());
+            let existing_set = self.0.entry(state.zobrist).or_default();
 
             let result = match existing_set.iter().position(|r| r.m == *m) {
                 Some(idx) => existing_set.get_mut(idx).unwrap(),
@@ -77,7 +77,7 @@ impl OpeningDb {
     /// Eg `db.filter_moves(|x| x.total_count() >= 10);` to filter all moves that occur fewer than
     /// 10 times in the database
     pub fn filter_moves(&mut self, filter: impl Fn(&DbResult) -> bool) {
-        for (_position, results) in self.0.iter_mut() {
+        for results in self.0.values_mut() {
             let mut i = 0;
             while i < results.len() {
                 if filter(&results[i]) {
@@ -92,8 +92,8 @@ impl OpeningDb {
     /// Merge two opening databases into one
     pub fn merge(mut self, mut other: Self) -> Self {
         for (key, other_values) in other.0.drain() {
-            if !self.0.contains_key(&key) {
-                self.0.insert(key, other_values);
+            if let std::collections::hash_map::Entry::Vacant(e) = self.0.entry(key) {
+                e.insert(other_values);
                 continue;
             }
 

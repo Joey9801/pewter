@@ -230,7 +230,7 @@ impl BoardPos {
         (self.rank.to_num() as i16 + self.file.to_num() as i16
             - other.rank.to_num() as i16
             - other.file.to_num() as i16)
-            .abs() as u8
+            .unsigned_abs() as u8
     }
 
     #[cfg(test)]
@@ -265,7 +265,7 @@ impl BoardPos {
     }
 
     pub fn two_forward(&self, color: Color) -> Option<Self> {
-        self.forward(color).map(|p| p.forward(color)).flatten()
+        self.forward(color).and_then(|p| p.forward(color))
     }
 
     pub fn left(&self) -> Option<Self> {
@@ -278,7 +278,7 @@ impl BoardPos {
 
     pub fn right(&self) -> Option<Self> {
         match self.file.to_num() + 1 {
-            x if x <= 7 => Some(File::from_num(x as u8)),
+            x if x <= 7 => Some(File::from_num(x)),
             _ => None,
         }
         .map(|file| Self::from_file_rank(file, self.rank))

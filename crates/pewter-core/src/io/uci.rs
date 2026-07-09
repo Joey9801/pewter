@@ -1,7 +1,7 @@
 //! (De)Serialization for UCI messages
 
 use anyhow::Result;
-use crossbeam_channel::{select, unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, select, unbounded};
 use std::fmt::Write;
 use std::io::BufRead;
 use std::sync::RwLock;
@@ -509,7 +509,7 @@ fn parse_position(cmd_str: &str) -> Result<UciCommand, EngineCommandParseError> 
 
     let moves = match parts.next() {
         Some("moves") => parts
-            .map(|p| Move::from_long_algebraic(p))
+            .map(Move::from_long_algebraic)
             .collect::<Result<_, _>>()
             .map_err(|_| EngineCommandParseError::InvalidCommand(cmd_str.to_string()))?,
         None => Vec::new(),
@@ -746,8 +746,8 @@ pub fn format_message(msg: UciMessage) -> String {
             EngineId::Name(name) => format!("id name {}", name),
             EngineId::Author(author) => format!("id author {}", author),
         },
-        UciMessage::UciOk => format!("uciok"),
-        UciMessage::ReadyOk => format!("readyok"),
+        UciMessage::UciOk => "uciok".to_string(),
+        UciMessage::ReadyOk => "readyok".to_string(),
         UciMessage::BestMove {
             best_move,
             ponder_move,
@@ -756,14 +756,14 @@ pub fn format_message(msg: UciMessage) -> String {
             None => format!("bestmove {:?}", best_move),
         },
         UciMessage::CopyProtection(c) => match c {
-            CopyProtectionMessage::Checking => format!("copprotection checking"),
-            CopyProtectionMessage::Ok => format!("copprotection ok"),
-            CopyProtectionMessage::Error => format!("copprotection error"),
+            CopyProtectionMessage::Checking => "copprotection checking".to_string(),
+            CopyProtectionMessage::Ok => "copprotection ok".to_string(),
+            CopyProtectionMessage::Error => "copprotection error".to_string(),
         },
         UciMessage::Registration(r) => match r {
-            RegistrationMessage::Checking => format!("registration checking"),
-            RegistrationMessage::Ok => format!("registration ok"),
-            RegistrationMessage::Error => format!("registration error"),
+            RegistrationMessage::Checking => "registration checking".to_string(),
+            RegistrationMessage::Ok => "registration ok".to_string(),
+            RegistrationMessage::Error => "registration error".to_string(),
         },
         UciMessage::Info(i) => format_info_message(i),
         UciMessage::Option(o) => format_option_message(o),
@@ -940,7 +940,7 @@ mod tests {
 
         let example_fen = "7k/2P5/3p4/7r/K7/8/8/8 w - - 0 1".to_string();
         assert_eq!(
-            parse_command(&format!("position fen {}", &example_fen)),
+            parse_command(&format!("position fen {}", example_fen)),
             Ok(UciCommand::Position {
                 position: Position::FenString(example_fen.clone()),
                 moves: Vec::new(),
@@ -959,7 +959,7 @@ mod tests {
         );
 
         assert_eq!(
-            parse_command(&format!("position fen {} moves c7c8q g8g7", &example_fen)),
+            parse_command(&format!("position fen {} moves c7c8q g8g7", example_fen)),
             Ok(UciCommand::Position {
                 position: Position::FenString(example_fen.clone()),
                 moves: vec![

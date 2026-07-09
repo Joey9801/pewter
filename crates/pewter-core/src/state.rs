@@ -11,14 +11,15 @@ pub enum CastleSide {
 }
 
 bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct CastleRights: u8 {
         const WHITE_KINGSIDE  = 0b0001;
         const WHITE_QUEENSIDE = 0b0010;
         const BLACK_KINGSIDE  = 0b0100;
         const BLACK_QUEENSIDE = 0b1000;
 
-        const ALL_WHITE = Self::WHITE_KINGSIDE.bits | Self::WHITE_QUEENSIDE.bits;
-        const ALL_BLACK = Self::BLACK_KINGSIDE.bits | Self::BLACK_QUEENSIDE.bits;
+        const ALL_WHITE = Self::WHITE_KINGSIDE.bits() | Self::WHITE_QUEENSIDE.bits();
+        const ALL_BLACK = Self::BLACK_KINGSIDE.bits() | Self::BLACK_QUEENSIDE.bits();
     }
 }
 
@@ -26,12 +27,13 @@ impl CastleRights {
     pub const fn get(self, color: Color, side: CastleSide) -> bool {
         use CastleSide::*;
         use Color::*;
-        match (color, side) {
-            (White, Kingside) => self.contains(Self::WHITE_KINGSIDE),
-            (White, Queenside) => self.contains(Self::WHITE_QUEENSIDE),
-            (Black, Kingside) => self.contains(Self::BLACK_KINGSIDE),
-            (Black, Queenside) => self.contains(Self::BLACK_QUEENSIDE),
-        }
+        let flag = match (color, side) {
+            (White, Kingside) => Self::WHITE_KINGSIDE,
+            (White, Queenside) => Self::WHITE_QUEENSIDE,
+            (Black, Kingside) => Self::BLACK_KINGSIDE,
+            (Black, Queenside) => Self::BLACK_QUEENSIDE,
+        };
+        self.bits() & flag.bits() != 0
     }
 }
 
@@ -140,8 +142,7 @@ impl State {
             .color_piece_board(opp_color, Piece::Pawn)
             .iter_set()
         {
-            let pawn_attacks = masks::pawn_attacks(opp_color, pawn)
-                .intersect_with(k_mask);
+            let pawn_attacks = masks::pawn_attacks(opp_color, pawn).intersect_with(k_mask);
 
             if pawn_attacks.any() {
                 self.checkers.set(pawn);

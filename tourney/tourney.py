@@ -113,7 +113,9 @@ class TimeControl(BaseModel):
         if base <= 0:
             raise ValueError(f"Time control base must be positive, got {base}")
         if increment < 0:
-            raise ValueError(f"Time control increment must be non-negative, got {increment}")
+            raise ValueError(
+                f"Time control increment must be non-negative, got {increment}"
+            )
 
         return cls(
             base=timedelta(seconds=base),
@@ -172,7 +174,9 @@ def load_openings(path: Path) -> list[Opening]:
         if not uci_moves:
             raise ValueError(f"{path}:{lineno}: opening line has no moves")
 
-        openings.append(Opening(name=name or f"Opening {len(openings) + 1}", moves=uci_moves))
+        openings.append(
+            Opening(name=name or f"Opening {len(openings) + 1}", moves=uci_moves)
+        )
 
     if not openings:
         raise ValueError(f"No openings found in {path}")
@@ -458,9 +462,7 @@ def play_games_parallel(args: dict[str, any]):
     play_game(*args)
 
 
-def elo_diff_and_ci(
-    wins: int, draws: int, losses: int
-) -> tuple[float, float, float]:
+def elo_diff_and_ci(wins: int, draws: int, losses: int) -> tuple[float, float, float]:
     """Estimate the Elo difference and a 95% confidence interval from a match result.
 
     Returns (elo, lower, upper) from the perspective of the engine that scored
@@ -571,7 +573,7 @@ def print_summary(db_path: Path, engine1_id: int, engine2_id: int):
     """,
         (engine1_id, engine2_id, engine1_id, engine2_id),
     )
-    
+
     games = cur.fetchall()
 
     print(
@@ -586,6 +588,7 @@ def print_summary(db_path: Path, engine1_id: int, engine2_id: int):
 
     print("    Games as Black:")
     print_row(filter(lambda g: g[1] == engine1_id, games))
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -686,10 +689,26 @@ def main():
     for i in range(half_games):
         opening = openings[i % len(openings)]
         jobs.append(
-            (args.db_path, engine1_def, engine1_id, engine2_def, engine2_id, args.tc, opening)
+            (
+                args.db_path,
+                engine1_def,
+                engine1_id,
+                engine2_def,
+                engine2_id,
+                args.tc,
+                opening,
+            )
         )  # Engine1 as White
         jobs.append(
-            (args.db_path, engine2_def, engine2_id, engine1_def, engine1_id, args.tc, opening)
+            (
+                args.db_path,
+                engine2_def,
+                engine2_id,
+                engine1_def,
+                engine1_id,
+                args.tc,
+                opening,
+            )
         )  # Engine2 as White
 
     # Run games in parallel using multiprocessing with progress bar
@@ -702,6 +721,7 @@ def main():
             pass
 
     print_summary(args.db_path, engine1_id, engine2_id)
+
 
 if __name__ == "__main__":
     main()

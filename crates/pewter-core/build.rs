@@ -36,37 +36,37 @@ fn generate_zobrist_numbers() -> Result<()> {
     writeln!(f, "///     color.to_num() * num_pieces * num_positions")?;
     writeln!(f, "///     + piece.to_num * num_positions")?;
     writeln!(f, "///     + pos.to_bitboard_offset()")?;
-    write!(f, "pub const ZOBRIST_PSC: [ZobristHash; {}] = [\n", psc_count)?;
+    writeln!(f, "pub const ZOBRIST_PSC: [ZobristHash; {psc_count}] = [")?;
     for _ in 0..(psc_count / 2) {
         let a = rng.next_u64();
         let b = rng.next_u64();
-        writeln!(f, "    ZobristHash({a:0>20}), ZobristHash({b:0>20}),")?;
+        writeln!(f, "    ZobristHash({a}), ZobristHash({b}),")?;
     }
-    writeln!(f, "];\n").unwrap();
+    writeln!(f, "];\n")?;
 
     writeln!(
         f,
         "/// One zobrist number for each of the 16 possible castling rights combinations"
     )?;
-    write!(f, "pub const ZOBRIST_CASTLING: [ZobristHash; 16] = [\n")?;
+    writeln!(f, "pub const ZOBRIST_CASTLING: [ZobristHash; 16] = [")?;
     for _ in 0..8 {
         let a = rng.next_u64();
         let b = rng.next_u64();
-        writeln!(f, "    ZobristHash({a:0>20}), ZobristHash({b:0>20}),")?;
+        writeln!(f, "    ZobristHash({a}), ZobristHash({b}),")?;
     }
-    writeln!(f, "];\n").unwrap();
+    writeln!(f, "];\n")?;
 
     writeln!(
         f,
         "/// One zobrist number for each file that could be en-passant"
     )?;
-    write!(f, "pub const ZOBRIST_EP: [ZobristHash; 8] = [\n")?;
+    writeln!(f, "pub const ZOBRIST_EP: [ZobristHash; 8] = [")?;
     for _ in 0..4 {
         let a = rng.next_u64();
         let b = rng.next_u64();
-        writeln!(f, "    ZobristHash({a:0>20}), ZobristHash({b:0>20}),")?;
+        writeln!(f, "    ZobristHash({a}), ZobristHash({b}),")?;
     }
-    writeln!(f, "];\n").unwrap();
+    writeln!(f, "];\n")?;
 
     Ok(())
 }

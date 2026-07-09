@@ -1,16 +1,16 @@
 use std::fmt::Write;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::Sender;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::seq::IndexedRandom;
 
 use crate::engine::ordering::order_moves;
-use pewter_core::{movegen::legal_moves, zobrist::ZobristHash, Color, Move, State};
+use pewter_core::{Color, Move, State, movegen::legal_moves, zobrist::ZobristHash};
 
 use super::transposition::{NodeType, TranspositionTable};
-use super::{eval, EngineError, Evaluation, PerfInfo, Timings};
+use super::{EngineError, Evaluation, PerfInfo, Timings, eval};
 
 /// How many nodes to search between polls of the stop flag / clock.
 const STOP_CHECK_INTERVAL: u32 = 2048;
@@ -316,13 +316,12 @@ impl<'a> Searcher<'a> {
         for depth in 1..=overall_max_depth {
             // Don't start a new (more expensive) iteration once the soft
             // deadline has passed, but always finish at least depth 1.
-            if depth > 1 {
-                if let Some(soft) = self.soft_deadline {
-                    if Instant::now() >= soft {
-                        tracing::debug!("Stopping search: soft deadline reached");
-                        break;
-                    }
-                }
+            if depth > 1
+                && let Some(soft) = self.soft_deadline
+                && Instant::now() >= soft
+            {
+                tracing::debug!("Stopping search: soft deadline reached");
+                break;
             }
 
             if self.controls.stop.load(Ordering::Relaxed) {
@@ -403,22 +402,22 @@ impl<'a> Searcher<'a> {
         // principal variation, so returning here would leave us without a move
         // to actually play. The root always performs a real search (it still
         // benefits from the table for move ordering and deeper cutoffs).
-        if ply_from_root > 0 {
-            if let Some(tt) = self.t_table.probe(state, depth_remaining, alpha, beta) {
-                return Ok(SearchResult {
-                    eval: from_tt_score(tt.node_value, ply_from_root),
+        if ply_from_root > 0
+            && let Some(tt) = self.t_table.probe(state, depth_remaining, alpha, beta)
+        {
+            return Ok(SearchResult {
+                eval: from_tt_score(tt.node_value, ply_from_root),
 
-                    // TODO: Store+export PV in transposition table for Exact nodes
-                    pv: None,
-                });
-            }
+                // TODO: Store+export PV in transposition table for Exact nodes
+                pv: None,
+            });
         }
 
         let mut moves = legal_moves(state).iter().collect::<Vec<Move>>();
 
         order_moves(state, &mut moves, &*self.t_table);
 
-        if moves.len() == 0 {
+        if moves.is_empty() {
             if state.in_check() {
                 // Fold the distance from the root into the mate score so that
                 // faster mates (and slower defences) are preferred.
@@ -525,7 +524,8 @@ impl<'a> Searcher<'a> {
 
         self.path.push(state.zobrist);
 
-        let mut scored: Vec<(Move, Evaluation, Option<Variation>)> = Vec::with_capacity(moves.len());
+        let mut scored: Vec<(Move, Evaluation, Option<Variation>)> =
+            Vec::with_capacity(moves.len());
         for m in moves {
             let new_state = state.apply_move(m);
             // Full window: every child is searched exactly, with no pruning from
@@ -562,7 +562,7 @@ impl<'a> Searcher<'a> {
                 .filter(|&&(_, score, _)| score + self.wobble.margin >= best);
             // `choose` needs a slice, so collect the small candidate set of refs.
             let pool: Vec<&(Move, Evaluation, Option<Variation>)> = pool.collect();
-            pool.choose(&mut thread_rng()).copied()
+            pool.choose(&mut rand::rng()).copied()
         };
 
         let pv = choice.map(|(m, score, child_pv)| Variation {
@@ -657,20 +657,19 @@ impl<'a> Searcher<'a> {
             return true;
         }
 
-        if let Some(max_nodes) = self.max_nodes {
-            if self.nodes_searched >= max_nodes {
-                self.aborted = true;
-                return true;
-            }
+        if let Some(max_nodes) = self.max_nodes
+            && self.nodes_searched >= max_nodes
+        {
+            self.aborted = true;
+            return true;
         }
 
-        if !self.infinite {
-            if let Some(hard) = self.hard_deadline {
-                if Instant::now() >= hard {
-                    self.aborted = true;
-                    return true;
-                }
-            }
+        if !self.infinite
+            && let Some(hard) = self.hard_deadline
+            && Instant::now() >= hard
+        {
+            self.aborted = true;
+            return true;
         }
 
         false
@@ -678,10 +677,8 @@ impl<'a> Searcher<'a> {
 
     #[inline(always)]
     fn maybe_emit_perf_msg(&mut self, ply_from_root: u8, max_depth: u8) -> Result<(), EngineError> {
-        if max_depth - ply_from_root >= 4 {
-            if self.last_perf_info.elapsed().as_secs() > 3 {
-                self.emit_perf_msg()?;
-            }
+        if max_depth - ply_from_root >= 4 && self.last_perf_info.elapsed().as_secs() > 3 {
+            self.emit_perf_msg()?;
         }
 
         Ok(())
@@ -753,7 +750,12 @@ mod tests {
     ) -> (Option<Move>, Evaluation) {
         let state = parse_fen(fen).unwrap();
         let mut t_table = TranspositionTable::with_mb(1);
-        let mut searcher = Searcher::new(controls(), &mut t_table, game_history, WobbleConfig::default());
+        let mut searcher = Searcher::new(
+            controls(),
+            &mut t_table,
+            game_history,
+            WobbleConfig::default(),
+        );
         let result = searcher
             .search_moves(
                 &state,
@@ -856,7 +858,12 @@ mod tests {
         // lookback window stays closed even against a matching hash.
         let state = parse_fen("4k3/8/8/8/8/8/8/4K3 w - - 2 20").unwrap();
         let mut t_table = TranspositionTable::with_mb(1);
-        let searcher = Searcher::new(controls(), &mut t_table, vec![state.zobrist; 4], WobbleConfig::default());
+        let searcher = Searcher::new(
+            controls(),
+            &mut t_table,
+            vec![state.zobrist; 4],
+            WobbleConfig::default(),
+        );
         assert!(!searcher.is_repetition(&state));
     }
 
@@ -921,8 +928,7 @@ mod tests {
 
     fn search_move(state: &State, depth: u8, wobble: WobbleConfig) -> Move {
         let mut t_table = TranspositionTable::with_mb(1);
-        let mut searcher =
-            Searcher::new(controls(), &mut t_table, vec![state.zobrist], wobble);
+        let mut searcher = Searcher::new(controls(), &mut t_table, vec![state.zobrist], wobble);
         searcher
             .search(state, depth, None, Timings::default(), false)
             .unwrap()

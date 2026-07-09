@@ -1,13 +1,18 @@
 use std::cmp::Reverse;
 
-use pewter_core::{Move, State, Piece};
+use pewter_core::{Move, Piece, State};
 
-use super::{eval::{Evaluation, self}, transposition::TranspositionTable};
+use super::{
+    eval::{self, Evaluation},
+    transposition::TranspositionTable,
+};
 
 fn predicted_score(state: &State, m: Move, hash_move: Option<Move>) -> Evaluation {
     let mut score = 0;
-    
-    let piece = state.board.get(m.from)
+
+    let piece = state
+        .board
+        .get(m.from)
         .expect("Move doesn't target a piece")
         .1;
 
@@ -19,11 +24,11 @@ fn predicted_score(state: &State, m: Move, hash_move: Option<Move>) -> Evaluatio
         // score is still higher.
         score += eval::consts::piece_value(Piece::Queen) + 10;
     }
-    
+
     if let Some(promotion) = m.promotion {
         score += eval::consts::piece_value(promotion);
     }
-    
+
     if hash_move == Some(m) {
         score += 10000;
     }
@@ -33,9 +38,13 @@ fn predicted_score(state: &State, m: Move, hash_move: Option<Move>) -> Evaluatio
 
 pub fn order_moves(state: &State, moves: &mut [Move], t: &TranspositionTable) {
     let hash_move = t
-        .probe(state, 0, eval::consts::POS_INFINITY, eval::consts::NEG_INFINITY)
-        .map(|e| e.m)
-        .flatten();
+        .probe(
+            state,
+            0,
+            eval::consts::POS_INFINITY,
+            eval::consts::NEG_INFINITY,
+        )
+        .and_then(|e| e.m);
 
     moves.sort_by_cached_key(|m| Reverse(predicted_score(state, *m, hash_move)));
 }

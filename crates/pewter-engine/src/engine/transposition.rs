@@ -1,4 +1,4 @@
-use pewter_core::{zobrist::ZobristHash, Move, State};
+use pewter_core::{Move, State, zobrist::ZobristHash};
 
 use super::Evaluation;
 
@@ -51,11 +51,7 @@ pub struct TranspositionTable {
 fn prev_power_of_two(n: usize) -> usize {
     debug_assert!(n >= 1);
     let p = n.next_power_of_two();
-    if p > n {
-        p >> 1
-    } else {
-        p
-    }
+    if p > n { p >> 1 } else { p }
 }
 
 impl TranspositionTable {
@@ -270,7 +266,8 @@ mod tests {
         // A single-slot table forces every position onto the same index.
         let mut table = TranspositionTable::with_slot_count(1);
         let deep = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-        let shallow = parse_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1").unwrap();
+        let shallow =
+            parse_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1").unwrap();
 
         table.insert(&deep, 8, 100, NodeType::Exact, None);
         // A shallower, different position must not evict the deeper entry.
@@ -281,7 +278,10 @@ mod tests {
         // A deeper different position does evict it.
         table.insert(&shallow, 9, 300, NodeType::Exact, None);
         assert!(table.probe(&deep, 0, -1000, 1000).is_none());
-        assert_eq!(table.probe(&shallow, 0, -1000, 1000).unwrap().node_value, 300);
+        assert_eq!(
+            table.probe(&shallow, 0, -1000, 1000).unwrap().node_value,
+            300
+        );
     }
 
     #[test]

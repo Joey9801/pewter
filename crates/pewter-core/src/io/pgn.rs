@@ -1,8 +1,8 @@
 use thiserror::Error;
 
 use crate::{
-    coordinates::consts::*, io::fen::parse_fen, movegen::legal_moves, state::GameResult, BoardPos,
-    Color, File, Move, Piece, Rank, State,
+    BoardPos, Color, File, Move, Piece, Rank, State, coordinates::consts::*, io::fen::parse_fen,
+    movegen::legal_moves, state::GameResult,
 };
 
 pub struct Game {
@@ -162,7 +162,7 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
 
     let starting = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     let mut state = parse_fen(starting).unwrap();
-    let initial_state = state.clone();
+    let initial_state = state;
     let mut moves = Vec::new();
     let mut result = GameResult::Ongoing;
     for line in pgn_str.lines() {
@@ -170,7 +170,7 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
             continue;
         }
 
-        if line.len() == 0 {
+        if line.is_empty() {
             continue;
         }
 
@@ -181,7 +181,7 @@ pub fn parse_single_pgn(pgn_str: &str) -> Result<Game, PgnParseError> {
         for token in line.split_ascii_whitespace() {
             let token = strip_move_number(token);
 
-            if token.len() == 0 {
+            if token.is_empty() {
                 continue;
             }
 
@@ -239,7 +239,7 @@ pub fn parse_multi_pgn(
         if line.as_bytes()[0] == b'[' {
             if !in_tags {
                 let last_pgn = &multi_pgn_str[this_pgn_start..this_pgn_end];
-                if last_pgn.len() > 0 {
+                if !last_pgn.is_empty() {
                     games.push(parse_single_pgn(last_pgn));
                 }
                 in_tags = true;
@@ -254,7 +254,7 @@ pub fn parse_multi_pgn(
     }
 
     let last_pgn = &multi_pgn_str[this_pgn_start..];
-    if last_pgn.len() > 0 {
+    if !last_pgn.is_empty() {
         games.push(parse_single_pgn(last_pgn));
     }
 
@@ -295,7 +295,7 @@ mod tests {
         }
     }
 
-    const EXAMPLE_PGN: &'static str = r#"[Event "Superbet Classic 2021"]
+    const EXAMPLE_PGN: &str = r#"[Event "Superbet Classic 2021"]
 [Site "Bucharest ROU"]
 [Date "2021.06.05"]
 [Round "1.5"]
@@ -324,7 +324,7 @@ mod tests {
         assert_eq!(game.moves[93].format_long_algebraic(), "g2g1");
     }
 
-    const EXAMPLE_MULTI_PGN: &'static str = r#"[Event "Superbet Classic 2021"]
+    const EXAMPLE_MULTI_PGN: &str = r#"[Event "Superbet Classic 2021"]
 [Site "Bucharest ROU"]
 [Date "2021.06.05"]
 [Round "1.5"]

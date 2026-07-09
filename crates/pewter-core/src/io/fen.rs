@@ -113,7 +113,7 @@ pub fn parse_fen(fen_str: &str) -> Result<State, FenParseError> {
     let placement_str = fields.next().ok_or(FenParseError::MissingFields)?;
     parse_fen_placements(placement_str, &mut state)?;
 
-    match fields.next().map(|s| s.chars().next()).flatten() {
+    match fields.next().and_then(|s| s.chars().next()) {
         Some('w') => state.to_play = Color::White,
         Some('b') => state.to_play = Color::Black,
         Some(c) => return Err(FenParseError::InvalidColor(c)),
@@ -177,7 +177,7 @@ fn format_fen_positions(state: &State, out: &mut String) {
             out.push_str(&format!("{}", empty_squares));
         }
         if *rank != FEN_RANKS[FEN_RANKS.len() - 1] {
-            out.push_str("/");
+            out.push('/');
         }
     }
 }
@@ -228,8 +228,7 @@ pub fn format_fen(state: &State) -> String {
 mod tests {
     use super::*;
 
-    const FEN_EXAMPLES: [&'static str; 1] =
-        ["rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"];
+    const FEN_EXAMPLES: [&str; 1] = ["rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"];
 
     #[test]
     fn test_fen_parse_roundtrips() {

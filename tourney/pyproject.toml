@@ -1,7 +1,7 @@
 [project]
 name = "tourney"
 version = "0.1.0"
-description = "Add your description here"
+description = "Round-robin tournament runner for comparing UCI chess engines"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -1,6 +1,6 @@
 use std::{path::Path, time::Duration};
 
-use pewter_core::{Move, State};
+use pewter_core::{zobrist::ZobristHash, Move, State};
 
 use anyhow::Result;
 use crossbeam_channel::SendError;
@@ -17,6 +17,7 @@ pub mod ordering;
 pub use engine_server::EngineServer;
 use eval::Evaluation;
 use search::{Searcher, SearchControls};
+use transposition::{TranspositionTable, DEFAULT_HASH_MB};
 
 use opening_db::OpeningDb;
 
@@ -55,6 +56,13 @@ pub struct PerfInfo {
 
     /// This many positions found in the shredder endgame databases
     pub shredder_hits: u64,
+
+    /// The iterative-deepening depth this message reports the score for, if any.
+    pub depth: Option<u8>,
+
+    /// The score of the root position from the engine's point of view, in the
+    /// engine's internal units, if known.
+    pub score: Option<Evaluation>,
 }
 
 #[derive(Clone, Error, Debug)]
@@ -85,6 +93,13 @@ impl<T> From<SendError<T>> for EngineError {
 pub struct Engine {
     board_state: Option<State>,
     opening_db: Option<OpeningDb>,
+
+    /// Persistent, fixed-size transposition table, reused across searches.
+    t_table: TranspositionTable,
+
+    /// Zobrist hashes of every position played so far in the current game, up to
+    /// and including `board_state`. Used for repetition detection during search.
+    game_history: Vec<ZobristHash>,
 }
 
 impl Engine {
@@ -92,6 +107,8 @@ impl Engine {
         Self {
             board_state: None,
             opening_db: None,
+            t_table: TranspositionTable::with_mb(DEFAULT_HASH_MB),
+            game_history: Vec::new(),
         }
     }
 
@@ -101,23 +118,38 @@ impl Engine {
         Ok(())
     }
 
-    pub fn set_board_state(&mut self, new_state: State) {
+    /// Set the position to search from, along with the Zobrist hashes of every
+    /// position that led to it (start position through to `new_state`
+    /// inclusive), so that the search can detect repetitions.
+    pub fn set_board_state(&mut self, new_state: State, game_history: Vec<ZobristHash>) {
         self.board_state = Some(new_state);
+        self.game_history = game_history;
+    }
+
+    /// Resize the transposition table, discarding its contents.
+    pub fn set_hash_size(&mut self, mb: usize) {
+        self.t_table.resize(mb);
+    }
+
+    /// Reset engine state for a fresh game, clearing the transposition table.
+    pub fn new_game(&mut self) {
+        self.t_table.clear();
+        self.game_history.clear();
     }
 
     pub fn search_best_move(
         &mut self,
         infinite: bool,
         max_depth: Option<u8>,
-        _max_nodes: Option<u64>,
+        max_nodes: Option<u64>,
         timings: Option<Timings>,
         controls: SearchControls,
     ) -> Result<Move, EngineError> {
-        let state = &self.board_state.ok_or(EngineError::NoState)?;
+        let state = self.board_state.ok_or(EngineError::NoState)?;
 
         // Check for opening DB hits first
         if let Some(db) = &self.opening_db {
-            let book_move = match db.query(state) {
+            let book_move = match db.query(&state) {
                 [] => None,
                 [r] => Some(r.m),
                 [multiple @ ..] => Some(multiple.choose(&mut thread_rng()).unwrap().m),
@@ -128,10 +160,21 @@ impl Engine {
                 return Ok(book_move);
             }
         }
-        
+
         let timings = timings.unwrap_or(Timings::default());
-        
-        let mut searcher = Searcher::new(controls);
-        searcher.search(state, max_depth.unwrap_or(10), timings, infinite)
+
+        // Bump the table generation so this search's writes are preferred over
+        // entries left behind by previous searches.
+        self.t_table.new_generation();
+
+        let game_history = self.game_history.clone();
+        let mut searcher = Searcher::new(controls, &mut self.t_table, game_history);
+        searcher.search(
+            &state,
+            max_depth.unwrap_or(u8::MAX),
+            max_nodes,
+            timings,
+            infinite,
+        )
     }
 }

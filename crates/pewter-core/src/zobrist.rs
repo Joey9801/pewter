@@ -11,6 +11,11 @@ impl ZobristHash {
     pub const fn null() -> Self {
         Self(0)
     }
+
+    /// The raw 64-bit hash value, e.g. for indexing a transposition table.
+    pub const fn get(self) -> u64 {
+        self.0
+    }
 }
 
 impl std::ops::BitXorAssign for ZobristHash {

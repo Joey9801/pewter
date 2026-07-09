@@ -6,7 +6,7 @@ use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 
 use super::{EngineError, PerfInfo, SearchControls, Timings};
-use pewter_core::{Move, State};
+use pewter_core::{zobrist::ZobristHash, Move, State};
 
 #[derive(Clone, Copy, Debug)]
 struct BeginSearchArgs {
@@ -28,7 +28,9 @@ struct BeginSearchArgs {
 /// Used internally in the engine server to give instructions to the main engine thread
 #[derive(Clone, Debug)]
 enum EngineCommand {
-    SetState(State),
+    SetState(State, Vec<ZobristHash>),
+    SetHashSize(usize),
+    NewGame,
     BeginSearch(BeginSearchArgs),
     Exit,
 }
@@ -61,8 +63,19 @@ impl EngineServer {
         })
     }
 
-    pub fn set_state(&mut self, new_state: State) -> Result<()> {
-        self.cmd_tx.send(EngineCommand::SetState(new_state))?;
+    pub fn set_state(&mut self, new_state: State, game_history: Vec<ZobristHash>) -> Result<()> {
+        self.cmd_tx
+            .send(EngineCommand::SetState(new_state, game_history))?;
+        Ok(())
+    }
+
+    pub fn set_hash_size(&mut self, mb: usize) -> Result<()> {
+        self.cmd_tx.send(EngineCommand::SetHashSize(mb))?;
+        Ok(())
+    }
+
+    pub fn new_game(&mut self) -> Result<()> {
+        self.cmd_tx.send(EngineCommand::NewGame)?;
         Ok(())
     }
 
@@ -146,7 +159,11 @@ fn engine_main_thread_inner(
 
     for cmd in cmd_rx {
         match cmd {
-            EngineCommand::SetState(state) => engine.set_board_state(state),
+            EngineCommand::SetState(state, game_history) => {
+                engine.set_board_state(state, game_history)
+            }
+            EngineCommand::SetHashSize(mb) => engine.set_hash_size(mb),
+            EngineCommand::NewGame => engine.new_game(),
             EngineCommand::BeginSearch(args) => {
                 let controls = SearchControls {
                     stop: search_stopper.clone(),

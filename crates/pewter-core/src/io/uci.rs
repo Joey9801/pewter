@@ -940,7 +940,7 @@ mod tests {
 
         let example_fen = "7k/2P5/3p4/7r/K7/8/8/8 w - - 0 1".to_string();
         assert_eq!(
-            parse_command(&format!("position fen {}", &example_fen)),
+            parse_command(&format!("position fen {}", example_fen)),
             Ok(UciCommand::Position {
                 position: Position::FenString(example_fen.clone()),
                 moves: Vec::new(),
@@ -959,7 +959,7 @@ mod tests {
         );
 
         assert_eq!(
-            parse_command(&format!("position fen {} moves c7c8q g8g7", &example_fen)),
+            parse_command(&format!("position fen {} moves c7c8q g8g7", example_fen)),
             Ok(UciCommand::Position {
                 position: Position::FenString(example_fen.clone()),
                 moves: vec![

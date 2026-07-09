@@ -77,7 +77,7 @@ impl OpeningDb {
     /// Eg `db.filter_moves(|x| x.total_count() >= 10);` to filter all moves that occur fewer than
     /// 10 times in the database
     pub fn filter_moves(&mut self, filter: impl Fn(&DbResult) -> bool) {
-        for (_position, results) in self.0.iter_mut() {
+        for results in self.0.values_mut() {
             let mut i = 0;
             while i < results.len() {
                 if filter(&results[i]) {

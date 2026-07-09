@@ -17,6 +17,12 @@ struct Options {
 
     /// Requested transposition table size, in mebibytes.
     hash_mb: usize,
+
+    /// Root-move randomisation margin, in centipawns (0 disables it).
+    wobble_cp: i32,
+
+    /// Number of opening plies over which to apply the wobble.
+    wobble_plies: u8,
 }
 
 impl Default for Options {
@@ -24,6 +30,8 @@ impl Default for Options {
         Self {
             debug: false,
             hash_mb: DEFAULT_HASH_MB,
+            wobble_cp: 0,
+            wobble_plies: 0,
         }
     }
 }
@@ -50,6 +58,22 @@ impl UciOptions for Options {
                 max: Some(4096),
                 combo_options: None,
             },
+            OptionMessage {
+                option_name: "Wobble".to_string(),
+                option_type: OptionType::Spin,
+                default: Some("0".to_string()),
+                min: Some(0),
+                max: Some(1000),
+                combo_options: None,
+            },
+            OptionMessage {
+                option_name: "WobblePlies".to_string(),
+                option_type: OptionType::Spin,
+                default: Some("0".to_string()),
+                min: Some(0),
+                max: Some(40),
+                combo_options: None,
+            },
         ]
     }
 
@@ -63,6 +87,14 @@ impl UciOptions for Options {
             "Hash" => {
                 let mb = value.parse::<usize>().map_err(|_| ())?;
                 self.hash_mb = mb.clamp(1, 4096);
+            }
+            "Wobble" => {
+                let cp = value.parse::<i32>().map_err(|_| ())?;
+                self.wobble_cp = cp.clamp(0, 1000);
+            }
+            "WobblePlies" => {
+                let plies = value.parse::<i32>().map_err(|_| ())?;
+                self.wobble_plies = plies.clamp(0, 40) as u8;
             }
             _ => Err(())?,
         }
@@ -124,8 +156,14 @@ fn handle_uci_cmd(
         UciCommand::SetOption { option_name, value } => {
             if let Some(value) = value {
                 let mut opts = opts.write().unwrap();
-                if opts.set_value(&option_name, &value).is_ok() && option_name == "Hash" {
-                    engine.set_hash_size(opts.hash_mb)?;
+                if opts.set_value(&option_name, &value).is_ok() {
+                    match option_name.as_str() {
+                        "Hash" => engine.set_hash_size(opts.hash_mb)?,
+                        "Wobble" | "WobblePlies" => {
+                            engine.set_wobble(opts.wobble_cp, opts.wobble_plies)?
+                        }
+                        _ => (),
+                    }
                 }
             }
         }

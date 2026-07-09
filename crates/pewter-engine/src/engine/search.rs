@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::Sender;
+use rand::{seq::SliceRandom, thread_rng};
 
 use crate::engine::ordering::order_moves;
 use pewter_core::{movegen::legal_moves, zobrist::ZobristHash, Color, Move, State};
@@ -90,6 +91,25 @@ impl Variation {
 
         out
     }
+}
+
+/// Optional root-move randomisation, used to diversify otherwise-identical
+/// self-play games without an external opening book.
+///
+/// When active, the root scores every legal move exactly (a full-window search
+/// of each) and then plays a random move from among those within `margin`
+/// centipawns of the best, rather than always the single best move. Restricting
+/// it to the opening (`plies`) keeps the strength cost small — early positions
+/// have many near-equal moves — while still branching games apart early.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WobbleConfig {
+    /// Score margin in centipawns. `0` disables wobble entirely (the default),
+    /// so normal play is completely deterministic and pays no overhead.
+    pub margin: Evaluation,
+
+    /// Apply wobble only while strictly fewer than this many plies (half-moves)
+    /// have been played in the game.
+    pub plies: u8,
 }
 
 /// The soft/hard time budget for a single search.
@@ -209,6 +229,9 @@ pub struct Searcher<'a> {
 
     /// Nodes searched since we last polled the stop conditions.
     nodes_since_check: u32,
+
+    /// Root-move randomisation config (disabled by default).
+    wobble: WobbleConfig,
 }
 
 struct SearchResult {
@@ -227,6 +250,7 @@ impl<'a> Searcher<'a> {
         controls: SearchControls,
         t_table: &'a mut TranspositionTable,
         game_history: Vec<ZobristHash>,
+        wobble: WobbleConfig,
     ) -> Self {
         Self {
             controls,
@@ -244,6 +268,7 @@ impl<'a> Searcher<'a> {
             aborted: false,
             max_nodes: None,
             nodes_since_check: 0,
+            wobble,
         }
     }
 
@@ -276,6 +301,13 @@ impl<'a> Searcher<'a> {
         // depth. In explicit-depth mode, honour the requested depth.
         let overall_max_depth = if infinite { u8::MAX } else { max_depth.max(1) };
 
+        // Whether to randomise the root move this search: only when configured
+        // with a positive margin and still within the opening window. The root
+        // position is the last entry in the game history, so the number of
+        // plies already played is `len - 1`.
+        let played_plies = self.game_history.len().saturating_sub(1);
+        let wobble = self.wobble.margin > 0 && played_plies < self.wobble.plies as usize;
+
         // A legal move to fall back on if we get aborted before completing even
         // the first depth.
         let fallback_move = legal_moves(state).iter().next();
@@ -299,13 +331,17 @@ impl<'a> Searcher<'a> {
             }
 
             tracing::debug!("Beginning search at depth {depth}");
-            let result = self.search_moves(
-                state,
-                0,
-                depth,
-                eval::consts::NEG_INFINITY,
-                eval::consts::POS_INFINITY,
-            )?;
+            let result = if wobble {
+                self.search_root_wobble(state, depth)?
+            } else {
+                self.search_moves(
+                    state,
+                    0,
+                    depth,
+                    eval::consts::NEG_INFINITY,
+                    eval::consts::POS_INFINITY,
+                )?
+            };
 
             // If the search was aborted part way through this iteration its
             // result is from an incomplete depth. Discard it and play the best
@@ -462,6 +498,82 @@ impl<'a> Searcher<'a> {
         );
 
         Ok(SearchResult { eval: alpha, pv })
+    }
+
+    /// Root search variant used when wobble is active. Unlike [`Self::search_moves`],
+    /// it scores *every* legal move with a full window (so all scores are exact,
+    /// not just the best one) and then returns a random move from among those
+    /// within the configured margin of the best.
+    fn search_root_wobble(
+        &mut self,
+        state: &State,
+        max_depth: u8,
+    ) -> Result<SearchResult, EngineError> {
+        self.nodes_searched += 1;
+
+        let mut moves = legal_moves(state).iter().collect::<Vec<Move>>();
+        order_moves(state, &mut moves, &*self.t_table);
+
+        if moves.is_empty() {
+            let eval = if state.in_check() {
+                eval::consts::MATE
+            } else {
+                eval::consts::DRAW
+            };
+            return Ok(SearchResult::just_eval(eval));
+        }
+
+        self.path.push(state.zobrist);
+
+        let mut scored: Vec<(Move, Evaluation, Option<Variation>)> = Vec::with_capacity(moves.len());
+        for m in moves {
+            let new_state = state.apply_move(m);
+            // Full window: every child is searched exactly, with no pruning from
+            // a sibling's score, so the returned value is the true score.
+            let result = self.search_moves(
+                &new_state,
+                1,
+                max_depth,
+                eval::consts::NEG_INFINITY,
+                eval::consts::POS_INFINITY,
+            )?;
+            scored.push((m, -result.eval, result.pv));
+
+            self.maybe_emit_perf_msg(0, max_depth)?;
+            if self.should_stop() {
+                break;
+            }
+        }
+
+        self.path.pop();
+
+        // If we were aborted mid-scan the scores are incomplete; the caller
+        // discards an aborted iteration, so just hand back what we have.
+        let best = scored
+            .iter()
+            .map(|&(_, score, _)| score)
+            .max()
+            .unwrap_or(eval::consts::DRAW);
+
+        // Choose uniformly among the moves within `margin` of the best.
+        let choice = {
+            let pool = scored
+                .iter()
+                .filter(|&&(_, score, _)| score + self.wobble.margin >= best);
+            // `choose` needs a slice, so collect the small candidate set of refs.
+            let pool: Vec<&(Move, Evaluation, Option<Variation>)> = pool.collect();
+            pool.choose(&mut thread_rng()).copied()
+        };
+
+        let pv = choice.map(|(m, score, child_pv)| Variation {
+            moves: match child_pv {
+                Some(child_pv) => MoveChain::NonTerminal(*m, Box::new(child_pv.moves.clone())),
+                None => MoveChain::Terminal(*m),
+            },
+            eval: *score,
+        });
+
+        Ok(SearchResult { eval: best, pv })
     }
 
     /// Whether the given position repeats one already seen along the current
@@ -641,7 +753,7 @@ mod tests {
     ) -> (Option<Move>, Evaluation) {
         let state = parse_fen(fen).unwrap();
         let mut t_table = TranspositionTable::with_mb(1);
-        let mut searcher = Searcher::new(controls(), &mut t_table, game_history);
+        let mut searcher = Searcher::new(controls(), &mut t_table, game_history, WobbleConfig::default());
         let result = searcher
             .search_moves(
                 &state,
@@ -710,7 +822,7 @@ mod tests {
         // current one, which is a repetition.
         let (state, history) = knight_shuffle_repetition();
         let mut t_table = TranspositionTable::with_mb(1);
-        let searcher = Searcher::new(controls(), &mut t_table, history);
+        let searcher = Searcher::new(controls(), &mut t_table, history, WobbleConfig::default());
         assert!(searcher.is_repetition(&state));
     }
 
@@ -718,7 +830,7 @@ mod tests {
     fn repetition_detected_along_search_path() {
         let (state, history) = knight_shuffle_repetition();
         let mut t_table = TranspositionTable::with_mb(1);
-        let mut searcher = Searcher::new(controls(), &mut t_table, vec![]);
+        let mut searcher = Searcher::new(controls(), &mut t_table, vec![], WobbleConfig::default());
         for h in history {
             searcher.path.push(h);
         }
@@ -734,7 +846,7 @@ mod tests {
         // (opposite side to move) ancestors.
         history.remove(0);
         let mut t_table = TranspositionTable::with_mb(1);
-        let searcher = Searcher::new(controls(), &mut t_table, history);
+        let searcher = Searcher::new(controls(), &mut t_table, history, WobbleConfig::default());
         assert!(!searcher.is_repetition(&state));
     }
 
@@ -744,7 +856,7 @@ mod tests {
         // lookback window stays closed even against a matching hash.
         let state = parse_fen("4k3/8/8/8/8/8/8/4K3 w - - 2 20").unwrap();
         let mut t_table = TranspositionTable::with_mb(1);
-        let searcher = Searcher::new(controls(), &mut t_table, vec![state.zobrist; 4]);
+        let searcher = Searcher::new(controls(), &mut t_table, vec![state.zobrist; 4], WobbleConfig::default());
         assert!(!searcher.is_repetition(&state));
     }
 
@@ -801,5 +913,70 @@ mod tests {
     #[test]
     fn no_budget_without_clock_or_move_time() {
         assert!(budget(Timings::default()).is_none());
+    }
+
+    fn startpos() -> State {
+        parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap()
+    }
+
+    fn search_move(state: &State, depth: u8, wobble: WobbleConfig) -> Move {
+        let mut t_table = TranspositionTable::with_mb(1);
+        let mut searcher =
+            Searcher::new(controls(), &mut t_table, vec![state.zobrist], wobble);
+        searcher
+            .search(state, depth, None, Timings::default(), false)
+            .unwrap()
+    }
+
+    #[test]
+    fn wobble_varies_the_root_move() {
+        // A wide margin makes every sane opening move eligible, so over many
+        // searches we should see more than one distinct choice.
+        let state = startpos();
+        let cfg = WobbleConfig {
+            margin: 1000,
+            plies: 10,
+        };
+        let legal: std::collections::HashSet<String> = legal_moves(&state)
+            .iter()
+            .map(|m| format!("{}", m))
+            .collect();
+
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..40 {
+            let m = format!("{}", search_move(&state, 2, cfg));
+            assert!(legal.contains(&m), "wobble produced an illegal move {}", m);
+            seen.insert(m);
+        }
+        assert!(
+            seen.len() > 1,
+            "wobble should produce more than one distinct move, saw {:?}",
+            seen
+        );
+    }
+
+    #[test]
+    fn wobble_disabled_is_deterministic() {
+        // Margin 0 (the default) must always play the single best move.
+        let state = startpos();
+        let expected = format!("{}", search_move(&state, 3, WobbleConfig::default()));
+        for _ in 0..10 {
+            let m = format!("{}", search_move(&state, 3, WobbleConfig::default()));
+            assert_eq!(m, expected);
+        }
+    }
+
+    #[test]
+    fn wobble_inactive_outside_opening_window() {
+        // With the ply window at zero, wobble never engages even with a margin.
+        let state = startpos();
+        let cfg = WobbleConfig {
+            margin: 1000,
+            plies: 0,
+        };
+        let expected = format!("{}", search_move(&state, 3, cfg));
+        for _ in 0..10 {
+            assert_eq!(format!("{}", search_move(&state, 3, cfg)), expected);
+        }
     }
 }

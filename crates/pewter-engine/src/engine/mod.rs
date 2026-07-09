@@ -16,7 +16,7 @@ pub mod ordering;
 
 pub use engine_server::EngineServer;
 use eval::Evaluation;
-use search::{Searcher, SearchControls};
+use search::{Searcher, SearchControls, WobbleConfig};
 use transposition::{TranspositionTable, DEFAULT_HASH_MB};
 
 use opening_db::OpeningDb;
@@ -100,6 +100,9 @@ pub struct Engine {
     /// Zobrist hashes of every position played so far in the current game, up to
     /// and including `board_state`. Used for repetition detection during search.
     game_history: Vec<ZobristHash>,
+
+    /// Optional root-move randomisation, for diversifying self-play games.
+    wobble: WobbleConfig,
 }
 
 impl Engine {
@@ -109,6 +112,7 @@ impl Engine {
             opening_db: None,
             t_table: TranspositionTable::with_mb(DEFAULT_HASH_MB),
             game_history: Vec::new(),
+            wobble: WobbleConfig::default(),
         }
     }
 
@@ -129,6 +133,16 @@ impl Engine {
     /// Resize the transposition table, discarding its contents.
     pub fn set_hash_size(&mut self, mb: usize) {
         self.t_table.resize(mb);
+    }
+
+    /// Configure root-move randomisation: play a random move from among those
+    /// within `margin_cp` centipawns of the best, but only for the first
+    /// `plies` half-moves of the game. A `margin_cp` of 0 disables it.
+    pub fn set_wobble(&mut self, margin_cp: Evaluation, plies: u8) {
+        self.wobble = WobbleConfig {
+            margin: margin_cp,
+            plies,
+        };
     }
 
     /// Reset engine state for a fresh game, clearing the transposition table.
@@ -168,7 +182,7 @@ impl Engine {
         self.t_table.new_generation();
 
         let game_history = self.game_history.clone();
-        let mut searcher = Searcher::new(controls, &mut self.t_table, game_history);
+        let mut searcher = Searcher::new(controls, &mut self.t_table, game_history, self.wobble);
         searcher.search(
             &state,
             max_depth.unwrap_or(u8::MAX),

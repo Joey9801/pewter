@@ -30,6 +30,7 @@ struct BeginSearchArgs {
 enum EngineCommand {
     SetState(State, Vec<ZobristHash>),
     SetHashSize(usize),
+    SetWobble(i32, u8),
     NewGame,
     BeginSearch(BeginSearchArgs),
     Exit,
@@ -71,6 +72,12 @@ impl EngineServer {
 
     pub fn set_hash_size(&mut self, mb: usize) -> Result<()> {
         self.cmd_tx.send(EngineCommand::SetHashSize(mb))?;
+        Ok(())
+    }
+
+    pub fn set_wobble(&mut self, margin_cp: i32, plies: u8) -> Result<()> {
+        self.cmd_tx
+            .send(EngineCommand::SetWobble(margin_cp, plies))?;
         Ok(())
     }
 
@@ -163,6 +170,7 @@ fn engine_main_thread_inner(
                 engine.set_board_state(state, game_history)
             }
             EngineCommand::SetHashSize(mb) => engine.set_hash_size(mb),
+            EngineCommand::SetWobble(margin_cp, plies) => engine.set_wobble(margin_cp, plies),
             EngineCommand::NewGame => engine.new_game(),
             EngineCommand::BeginSearch(args) => {
                 let controls = SearchControls {
